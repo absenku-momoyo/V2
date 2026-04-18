@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#EC4899"/>
+<title>Absen Momoyo V2</title>
+<style>
+:root{
+  --brand:#EC4899; --brand-dark:#BE185D; --brand-bg:#FCE7F3;
+  --green:#16A34A; --green-bg:#DCFCE7;
+  --red:#DC2626; --red-bg:#FEE2E2;
+  --amber:#D97706; --amber-bg:#FEF3C7;
+  --blue:#1D4ED8; --blue-bg:#EFF6FF;
+  --purple:#6D28D9; --purple-bg:#EDE9FE;
+  --text:#111827; --text2:#4B5563; --text3:#9CA3AF;
+  --border:#E5E7EB; --bg:#F9FAFB; --surface:#FFFFFF; --surface2:#F3F4F6;
+  --rs:10px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+body{min-height:100vh}
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.show{display:flex}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px;background:linear-gradient(135deg,#EC4899 0%,#BE185D 100%);color:white}
+.login-title{font-size:28px;font-weight:800;text-align:center;margin-bottom:4px}
+.login-sub{text-align:center;opacity:.9;margin-bottom:32px;font-size:13px}
+.login-card{background:white;color:var(--text);border-radius:16px;padding:20px}
+.role-switch{display:flex;gap:8px;margin-bottom:16px;background:var(--surface2);padding:4px;border-radius:10px}
+.role-btn{flex:1;padding:10px;border:none;background:transparent;font-weight:700;font-size:13px;border-radius:8px;cursor:pointer;color:var(--text2)}
+.role-btn.on{background:var(--brand);color:white}
+
+.lbl{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;display:block}
+.input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:12px}
+.input:focus{outline:none;border-color:var(--brand)}
+.btn{width:100%;padding:12px;font-size:14px;font-weight:700;border-radius:var(--rs);border:none;cursor:pointer}
+.btn-brand{background:var(--brand);color:white}
+.btn-brand:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed}
+.err-box{background:var(--red-bg);color:var(--red);padding:10px;border-radius:8px;font-size:12px;margin-bottom:10px;display:none}
+
+/* SCREENS */
+.bar{background:var(--surface);padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.bar-avatar{width:36px;height:36px;border-radius:50%;background:var(--brand-bg);color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.bar-info{flex:1;min-width:0}
+.bar-nama{font-weight:700;font-size:14px;line-height:1.2}
+.bar-outlet{font-size:11px;color:var(--text3);margin-top:2px}
+.logout-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer}
+
+.scroll{flex:1;overflow-y:auto;padding:14px 16px;padding-bottom:70px}
+.card{background:var(--surface);border-radius:var(--rs);padding:14px;border:1px solid var(--border);margin-bottom:10px}
+.card-lbl{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+
+/* Placeholder content */
+.soon-box{text-align:center;padding:40px 20px;color:var(--text3)}
+.soon-box .icon{font-size:40px;margin-bottom:8px}
+
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:white;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="screen show" id="sc-login">
+  <div class="login-wrap">
+    <div class="login-title">🍦 Absen Momoyo</div>
+    <div class="login-sub">Aplikasi absensi V2</div>
+    <div class="login-card">
+      <div class="role-switch">
+        <button class="role-btn on" id="rb-crew" onclick="setRole('crew')">👤 Crew</button>
+        <button class="role-btn" id="rb-owner" onclick="setRole('owner')">👑 Owner</button>
+      </div>
+      <div class="err-box" id="login-err"></div>
+
+      <!-- CREW login -->
+      <div id="login-crew-form">
+        <label class="lbl">Outlet</label>
+        <select class="input" id="li-outlet" onchange="onOutletChange()">
+          <option value="">Memuat outlet...</option>
+        </select>
+        <div id="li-crew-wrap" style="display:none">
+          <label class="lbl">Nama kamu</label>
+          <select class="input" id="li-crew">
+            <option value="">Pilih nama...</option>
+          </select>
+        </div>
+        <div id="li-pass-wrap" style="display:none">
+          <label class="lbl">Password outlet</label>
+          <input class="input" type="password" id="li-pass" placeholder="Password..."/>
+        </div>
+        <button class="btn btn-brand" id="btn-login-crew" onclick="loginCrew()" disabled>Masuk</button>
+      </div>
+
+      <!-- OWNER login -->
+      <div id="login-owner-form" style="display:none">
+        <label class="lbl">Password owner</label>
+        <input class="input" type="password" id="li-owner-pass" placeholder="Password owner..."/>
+        <button class="btn btn-brand" onclick="loginOwner()">Masuk sebagai Owner</button>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;opacity:.7">V2 · Dev Mode</div>
+  </div>
+</div>
+
+<!-- CREW HOME -->
+<div class="screen" id="sc-crew-home">
+  <div class="bar">
+    <div class="bar-avatar" id="bar-av">-</div>
+    <div class="bar-info">
+      <div class="bar-nama" id="bar-nama">-</div>
+      <div class="bar-outlet" id="bar-outlet">-</div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Keluar</button>
+  </div>
+  <div class="scroll">
+    <div class="card">
+      <div class="card-lbl">✅ Login berhasil</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.5">
+        Step 1 sukses — koneksi Supabase OK, login jalan.<br><br>
+        Halaman crew home lengkap (clock in/out, shift chip, tombol libur, riwayat) akan ditambahkan di <b>Step 2</b>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OWNER HOME -->
+<div class="screen" id="sc-owner-home">
+  <div class="bar">
+    <div class="bar-avatar" style="background:var(--amber-bg);color:var(--amber)">👑</div>
+    <div class="bar-info">
+      <div class="bar-nama">Owner</div>
+      <div class="bar-outlet">Akses penuh · Momoyo Ice Cream</div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Keluar</button>
+  </div>
+  <div class="scroll">
+    <div class="card">
+      <div class="card-lbl">✅ Login owner berhasil</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.5">
+        Step 1 sukses — koneksi Supabase OK, password owner valid.<br><br>
+        Halaman owner lengkap (dashboard, rekap, atur crew, notifikasi telat) akan ditambahkan di <b>Step 3+</b>.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-lbl">📊 Outlet Terdaftar</div>
+      <div id="owner-outlet-list" style="font-size:13px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const SUPABASE_URL = 'https://zbrwnybcsuyjvsafjbas.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpicndueWJjc3V5anZzYWZqYmFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjU1NjcsImV4cCI6MjA5MjEwMTU2N30.dgvSYVdOGflURKNiUrH_9ZiBl8pUPa0-diLyTu3M_aY';
+
+// ============================================================
+// SUPABASE REST HELPERS
+// ============================================================
+async function sbGet(table, query){
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?'+query : ''}`;
+  const r = await fetch(url, {
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer '+SUPABASE_ANON_KEY
+    }
+  });
+  if(!r.ok) throw new Error('sbGet '+r.status);
+  return await r.json();
+}
+async function sbInsert(table, data){
+  const url = `${SUPABASE_URL}/rest/v1/${table}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(data)
+  });
+  return r.ok;
+}
+async function sbUpdate(table, data, filter){
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${filter}`;
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(data)
+  });
+  return r.ok;
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let role = 'crew';
+let user = null;
+let OUTLETS = []; // cache outlet dari DB
+
+// ============================================================
+// HELPERS
+// ============================================================
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  document.getElementById(id).classList.add('show');
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+function showErr(msg){
+  const e = document.getElementById('login-err');
+  e.textContent = msg;
+  e.style.display = 'block';
+  setTimeout(()=>e.style.display='none', 4000);
+}
+function inisial(n){
+  return n.split(' ').map(x=>x[0]).join('').substring(0,2).toUpperCase();
+}
+
+// ============================================================
+// ROLE SWITCH
+// ============================================================
+function setRole(r){
+  role = r;
+  document.getElementById('rb-crew').className = 'role-btn'+(r==='crew'?' on':'');
+  document.getElementById('rb-owner').className = 'role-btn'+(r==='owner'?' on':'');
+  document.getElementById('login-crew-form').style.display = r==='crew' ? 'block' : 'none';
+  document.getElementById('login-owner-form').style.display = r==='owner' ? 'block' : 'none';
+  document.getElementById('login-err').style.display = 'none';
+}
+
+// ============================================================
+// LOAD OUTLETS (dipanggil saat startup)
+// ============================================================
+async function loadOutlets(){
+  const sel = document.getElementById('li-outlet');
+  try {
+    const data = await sbGet('outlets', 'select=id,nama,password&order=nama');
+    OUTLETS = data;
+    sel.innerHTML = '<option value="">Pilih outlet...</option>' +
+      data.map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
+  } catch(e){
+    sel.innerHTML = '<option value="">❌ Gagal load outlet</option>';
+    console.error('Gagal load outlets:', e);
+    showErr('Gagal koneksi ke database. Cek koneksi internet.');
+  }
+}
+
+// ============================================================
+// CREW LOGIN FLOW
+// ============================================================
+async function onOutletChange(){
+  const outletNama = document.getElementById('li-outlet').value;
+  const crewSel = document.getElementById('li-crew');
+  const wrapCrew = document.getElementById('li-crew-wrap');
+  const wrapPass = document.getElementById('li-pass-wrap');
+  const btnLogin = document.getElementById('btn-login-crew');
+
+  if(!outletNama){
+    wrapCrew.style.display = 'none';
+    wrapPass.style.display = 'none';
+    btnLogin.disabled = true;
+    return;
+  }
+
+  crewSel.innerHTML = '<option value="">Memuat crew...</option>';
+  wrapCrew.style.display = 'block';
+
+  try {
+    const crews = await sbGet('crew',
+      'select=nama,nama_panggilan&outlet_nama=eq.'+encodeURIComponent(outletNama)+
+      '&aktif=eq.true&order=nama');
+    if(!crews || crews.length === 0){
+      crewSel.innerHTML = '<option value="">Belum ada crew di outlet ini</option>';
+      wrapPass.style.display = 'none';
+      btnLogin.disabled = true;
+      return;
+    }
+    crewSel.innerHTML = '<option value="">Pilih nama kamu...</option>' +
+      crews.map(c => {
+        const label = c.nama_panggilan ? `${c.nama} (${c.nama_panggilan})` : c.nama;
+        return `<option value="${c.nama}">${label}</option>`;
+      }).join('');
+    wrapPass.style.display = 'block';
+    btnLogin.disabled = false;
+  } catch(e){
+    crewSel.innerHTML = '<option value="">❌ Error</option>';
+    console.error(e);
+  }
+}
+
+async function loginCrew(){
+  const outletNama = document.getElementById('li-outlet').value;
+  const crewNama = document.getElementById('li-crew').value;
+  const pass = document.getElementById('li-pass').value;
+  const btn = document.getElementById('btn-login-crew');
+
+  if(!outletNama){ showErr('Pilih outlet'); return; }
+  if(!crewNama){ showErr('Pilih nama kamu'); return; }
+  if(!pass){ showErr('Isi password'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+
+  try {
+    const outletData = OUTLETS.find(o => o.nama === outletNama);
+    if(!outletData){ showErr('Outlet tidak ditemukan'); btn.disabled=false; btn.textContent='Masuk'; return; }
+    if(outletData.password !== pass){
+      showErr('❌ Password salah!');
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+      return;
+    }
+
+    user = {
+      role: 'crew',
+      nama: crewNama,
+      outlet: outletNama
+    };
+
+    document.getElementById('bar-av').textContent = inisial(crewNama);
+    document.getElementById('bar-nama').textContent = crewNama;
+    document.getElementById('bar-outlet').textContent = outletNama;
+    showScreen('sc-crew-home');
+    showToast('Selamat datang, '+crewNama+' 👋');
+  } catch(e){
+    showErr('Gagal login: '+e.message);
+    btn.disabled = false;
+    btn.textContent = 'Masuk';
+  }
+}
+
+// ============================================================
+// OWNER LOGIN
+// ============================================================
+async function loginOwner(){
+  const pass = document.getElementById('li-owner-pass').value;
+  if(!pass){ showErr('Isi password owner'); return; }
+
+  try {
+    const data = await sbGet('owner_config', 'select=password&id=eq.1');
+    if(!data || data.length === 0){
+      showErr('Owner config tidak ditemukan');
+      return;
+    }
+    if(data[0].password !== pass){
+      showErr('❌ Password owner salah!');
+      return;
+    }
+
+    user = { role: 'owner' };
+
+    // Tampilkan daftar outlet di owner home
+    const list = document.getElementById('owner-outlet-list');
+    list.innerHTML = OUTLETS.map(o => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span>${o.nama}</span>
+        <span style="color:var(--text3);font-size:11px">Aktif</span>
+      </div>`).join('');
+
+    showScreen('sc-owner-home');
+    showToast('Login owner berhasil 👑');
+  } catch(e){
+    showErr('Gagal login: '+e.message);
+  }
+}
+
+// ============================================================
+// LOGOUT
+// ============================================================
+function logout(){
+  user = null;
+  document.getElementById('li-pass').value = '';
+  document.getElementById('li-owner-pass').value = '';
+  document.getElementById('li-outlet').value = '';
+  document.getElementById('li-crew-wrap').style.display = 'none';
+  document.getElementById('li-pass-wrap').style.display = 'none';
+  document.getElementById('btn-login-crew').disabled = true;
+  setRole('crew');
+  showScreen('sc-login');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadOutlets();
+</script>
+</body>
+</html>
