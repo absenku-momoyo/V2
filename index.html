@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<meta name="theme-color" content="#EC4899"/>
-<title>Absen Momoyo V2</title>
+<meta name="theme-color" content="#DC2626"/>
+<title>AbsenKu — Momoyo Ice Cream</title>
+<link rel="icon" href="./logo.png"/>
 <style>
 :root{
-  --brand:#EC4899; --brand-dark:#BE185D; --brand-bg:#FCE7F3;
+  --brand:#DC2626; --brand-dark:#991B1B; --brand-bg:#FEE2E2;
   --green:#16A34A; --green-bg:#DCFCE7;
   --red:#DC2626; --red-bg:#FEE2E2;
   --amber:#D97706; --amber-bg:#FEF3C7;
@@ -24,21 +25,28 @@ body{min-height:100vh}
 .screen.show{display:flex}
 
 /* LOGIN */
-.login-wrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px;background:linear-gradient(135deg,#EC4899 0%,#BE185D 100%);color:white}
-.login-title{font-size:28px;font-weight:800;text-align:center;margin-bottom:4px}
-.login-sub{text-align:center;opacity:.9;margin-bottom:32px;font-size:13px}
-.login-card{background:white;color:var(--text);border-radius:16px;padding:20px}
-.role-switch{display:flex;gap:8px;margin-bottom:16px;background:var(--surface2);padding:4px;border-radius:10px}
-.role-btn{flex:1;padding:10px;border:none;background:transparent;font-weight:700;font-size:13px;border-radius:8px;cursor:pointer;color:var(--text2)}
-.role-btn.on{background:var(--brand);color:white}
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:20px;background:linear-gradient(160deg,#DC2626 0%,#991B1B 100%);color:white;position:relative;overflow:hidden}
+.login-wrap::before{content:'';position:absolute;width:300px;height:300px;background:rgba(255,255,255,.05);border-radius:50%;top:-100px;right:-100px}
+.login-wrap::after{content:'';position:absolute;width:200px;height:200px;background:rgba(255,255,255,.03);border-radius:50%;bottom:-50px;left:-50px}
+.logo-wrap{text-align:center;margin-bottom:24px;position:relative;z-index:1}
+.logo-img{width:110px;height:110px;border-radius:50%;background:white;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.2);margin:0 auto;display:block}
+.logo-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.login-title{font-size:30px;font-weight:800;text-align:center;margin-top:14px;letter-spacing:-0.5px}
+.login-sub{text-align:center;opacity:.85;margin-top:4px;font-size:12px;font-weight:500}
+.login-card{background:white;color:var(--text);border-radius:18px;padding:20px;position:relative;z-index:1;box-shadow:0 20px 40px rgba(0,0,0,.15)}
+.role-switch{display:flex;gap:6px;margin-bottom:18px;background:var(--surface2);padding:4px;border-radius:12px}
+.role-btn{flex:1;padding:11px;border:none;background:transparent;font-weight:700;font-size:13px;border-radius:9px;cursor:pointer;color:var(--text2);transition:all .15s}
+.role-btn.on{background:var(--red);color:white;box-shadow:0 2px 8px rgba(220,38,38,.3)}
 
 .lbl{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;display:block}
-.input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:12px}
-.input:focus{outline:none;border-color:var(--brand)}
-.btn{width:100%;padding:12px;font-size:14px;font-weight:700;border-radius:var(--rs);border:none;cursor:pointer}
-.btn-brand{background:var(--brand);color:white}
-.btn-brand:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed}
+.input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:12px}
+.input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(220,38,38,.1)}
+.btn{width:100%;padding:12px;font-size:14px;font-weight:700;border-radius:var(--rs);border:none;cursor:pointer;transition:all .15s}
+.btn-brand{background:var(--red);color:white;box-shadow:0 4px 12px rgba(220,38,38,.2)}
+.btn-brand:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(220,38,38,.3)}
+.btn-brand:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed;box-shadow:none;transform:none}
 .err-box{background:var(--red-bg);color:var(--red);padding:10px;border-radius:8px;font-size:12px;margin-bottom:10px;display:none}
+.login-foot{text-align:center;margin-top:16px;font-size:10px;opacity:.7;position:relative;z-index:1;letter-spacing:.5px}
 
 /* SCREENS */
 .bar{background:var(--surface);padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
@@ -136,8 +144,11 @@ body{min-height:100vh}
 <!-- LOGIN SCREEN -->
 <div class="screen show" id="sc-login">
   <div class="login-wrap">
-    <div class="login-title">🍦 Absen Momoyo</div>
-    <div class="login-sub">Aplikasi absensi V2</div>
+    <div class="logo-wrap">
+      <div class="logo-img"><img src="./logo.png" alt="Momoyo"/></div>
+      <div class="login-title">AbsenKu</div>
+      <div class="login-sub">Sistem Absensi Momoyo · AI-CHA · Mixue</div>
+    </div>
     <div class="login-card">
       <div class="role-switch">
         <button class="role-btn on" id="rb-crew" onclick="setRole('crew')">👤 Crew</button>
@@ -161,7 +172,7 @@ body{min-height:100vh}
           <label class="lbl">Password outlet</label>
           <input class="input" type="password" id="li-pass" placeholder="Password..."/>
         </div>
-        <button class="btn btn-brand" id="btn-login-crew" onclick="loginCrew()" disabled>Masuk</button>
+        <button class="btn btn-brand" id="btn-login-crew" onclick="loginCrew()" disabled>Masuk →</button>
       </div>
 
       <!-- OWNER login -->
@@ -171,7 +182,7 @@ body{min-height:100vh}
         <button class="btn btn-brand" onclick="loginOwner()">Masuk sebagai Owner</button>
       </div>
     </div>
-    <div style="text-align:center;margin-top:16px;font-size:11px;opacity:.7">V2 · Dev Mode</div>
+    <div class="login-foot">GPS AKTIF · FOTO SELFIE WAJIB · V2</div>
   </div>
 </div>
 
@@ -565,6 +576,19 @@ body{min-height:100vh}
     <div class="btn-row">
       <button class="btn btn-outline" onclick="closeModal('modal-insentif')">Tutup</button>
       <button class="btn btn-green" id="btn-save-insentif" onclick="saveInsentif()" style="display:none">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETAIL CREW (rekap per hari + foto) -->
+<div class="modal-overlay" id="modal-detail-crew">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="dc-title">Detail</div>
+    <div class="modal-sub" id="dc-sub">-</div>
+    <div id="dc-list" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modal-detail-crew')">Tutup</button>
     </div>
   </div>
 </div>
@@ -1157,7 +1181,7 @@ async function loadRekap(){
   result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
 
   // Get absensi
-  let query = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=1000';
+  let query = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=5000';
   if(outletFilter) query = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+query;
   let absensi = [];
   try { absensi = await sbGet('absensi', query); } catch(e){}
@@ -1167,22 +1191,38 @@ async function loadRekap(){
     return;
   }
 
-  // Group per outlet → crew
+  // Simpan untuk detail + export
+  window._rekapAbsensi = absensi;
+  window._rekapBulan = bulan;
+  window._rekapTahun = tahun;
+
+  // Group per outlet → crew → detail
   const perOutletCrew = {};
+  const detailMap = {}; // key: outlet|nama → list absensi
   absensi.forEach(a => {
-    const key = a.outlet_nama;
-    if(!perOutletCrew[key]) perOutletCrew[key] = {};
-    if(!perOutletCrew[key][a.nama]) perOutletCrew[key][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
-    const s = perOutletCrew[key][a.nama];
+    const outKey = a.outlet_nama;
+    if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
+    if(!perOutletCrew[outKey][a.nama]) perOutletCrew[outKey][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = perOutletCrew[outKey][a.nama];
     if(a.status==='masuk') s.masuk++;
     else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
     else if(a.status==='libur') s.libur++;
     else if(a.status==='cuti') s.cuti++;
     else if(a.status==='alpha') s.alpha++;
+
+    const dKey = outKey+'|'+a.nama;
+    if(!detailMap[dKey]) detailMap[dKey] = [];
+    detailMap[dKey].push(a);
   });
+  window._rekapDetail = detailMap;
 
   // Render
-  let html = '';
+  const bulanNama = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][bulan];
+  let html = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:700">📅 ${bulanNama} ${tahun}${outletFilter?' · '+outletFilter:' · Semua outlet'}</div>
+    <button class="mini-btn" style="background:var(--green);color:white;padding:6px 12px" onclick="exportRekapExcel()">📥 Export Excel</button>
+  </div>`;
+
   for(const outlet of Object.keys(perOutletCrew).sort()){
     const crewMap = perOutletCrew[outlet];
     const namaList = Object.keys(crewMap).sort();
@@ -1197,6 +1237,7 @@ async function loadRekap(){
           <th style="padding:6px">A</th>
           <th style="padding:6px">Lbr</th>
           <th style="padding:6px;color:var(--green)">Trh</th>
+          <th style="padding:6px">·</th>
         </tr></thead>
         <tbody>`;
     namaList.forEach(nama => {
@@ -1204,6 +1245,7 @@ async function loadRekap(){
       const total = s.masuk+s.libur+s.cuti+s.alpha;
       const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
       const col = s.alpha>0 ? 'var(--red)' : 'var(--green)';
+      const detailKey = outlet+'|'+nama;
       html += `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:6px">${nama}</td>
         <td style="text-align:center;padding:6px">${s.masuk}</td>
@@ -1212,13 +1254,117 @@ async function loadRekap(){
         <td style="text-align:center;padding:6px;color:${s.alpha>0?'var(--red)':'inherit'}">${s.alpha}</td>
         <td style="text-align:center;padding:6px">${s.lemburHari}(${s.lemburJam}j)</td>
         <td style="text-align:center;padding:6px;color:${col};font-weight:700">${terhitung}/${total}</td>
+        <td style="text-align:center;padding:6px">
+          <button class="mini-btn" style="background:var(--blue-bg);color:var(--blue);padding:3px 8px;font-size:10px" onclick="showDetailCrew('${detailKey.replace(/'/g,"\\'")}')">🔍</button>
+        </td>
       </tr>`;
     });
     html += '</tbody></table></div>';
-    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px">M=Masuk, L=Libur, C=Cuti, A=Alpha, Lbr=Lembur (hari + jam), Trh=Terhitung</div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px">M=Masuk, L=Libur, C=Cuti, A=Alpha, Lbr=Lembur (hari + jam), Trh=Terhitung · 🔍 = lihat detail harian + foto</div>';
     html += '</div>';
   }
   result.innerHTML = html;
+}
+
+// Modal detail crew: absensi harian + foto
+function showDetailCrew(key){
+  const data = window._rekapDetail[key] || [];
+  if(data.length === 0) return;
+  const [outlet, nama] = key.split('|');
+  const modal = document.getElementById('modal-detail-crew');
+  document.getElementById('dc-title').textContent = nama;
+  document.getElementById('dc-sub').textContent = outlet;
+
+  const rowsHtml = data.map(a => {
+    const foto = a.foto_url ? a.foto_url.split(' | ') : [];
+    const fotoBtn = foto.length > 0
+      ? foto.map((url,i) => `<a href="${url}" target="_blank" class="mini-btn" style="background:var(--blue-bg);color:var(--blue);padding:3px 8px;font-size:10px;text-decoration:none;margin-right:2px">📸 ${i===0?'CI':'CO'}</a>`).join('')
+      : '<span style="color:var(--text3);font-size:10px">-</span>';
+    const jamInfo = a.clock_in ? `${a.clock_in} – ${a.clock_out||'...'}` : '—';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${a.tanggal}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">
+            <span class="badge ${a.status}">${a.status}</span>
+            <span style="margin-left:6px">${jamInfo}</span>
+            ${a.lembur_jam>0?' · Lembur '+a.lembur_jam+'j':''}
+          </div>
+        </div>
+        <div style="flex-shrink:0">${fotoBtn}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('dc-list').innerHTML = rowsHtml;
+  modal.classList.add('show');
+}
+
+// Export rekap ke Excel (CSV yang bisa dibuka di Excel)
+function exportRekapExcel(){
+  const absensi = window._rekapAbsensi || [];
+  const bulan = window._rekapBulan;
+  const tahun = window._rekapTahun;
+  if(absensi.length === 0){ showToast('Belum ada data'); return; }
+
+  // Buat CSV: header + rows
+  const headers = ['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur (jam)','Jarak GPS','Foto URL'];
+  const rows = [headers.join(',')];
+  absensi.forEach(a => {
+    const row = [
+      `"${a.outlet_nama||''}"`,
+      `"${a.nama||''}"`,
+      `"${a.tanggal||''}"`,
+      `"${a.shift||''}"`,
+      `"${a.clock_in||''}"`,
+      `"${a.clock_out||''}"`,
+      `"${a.status||''}"`,
+      a.lembur_jam||0,
+      a.jarak||'',
+      `"${a.foto_url||''}"`
+    ];
+    rows.push(row.join(','));
+  });
+
+  // Summary sheet as second section
+  rows.push('');
+  rows.push('=== RINGKASAN PER CREW ===');
+  rows.push(['Outlet','Nama','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Terhitung/Total'].join(','));
+
+  const perCrew = {};
+  absensi.forEach(a => {
+    const k = a.outlet_nama+'|'+a.nama;
+    if(!perCrew[k]) perCrew[k] = {outlet:a.outlet_nama,nama:a.nama,masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = perCrew[k];
+    if(a.status==='masuk') s.masuk++;
+    else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
+    else if(a.status==='libur') s.libur++;
+    else if(a.status==='cuti') s.cuti++;
+    else if(a.status==='alpha') s.alpha++;
+  });
+  Object.values(perCrew).sort((a,b)=>a.outlet.localeCompare(b.outlet)||a.nama.localeCompare(b.nama)).forEach(s => {
+    const total = s.masuk+s.libur+s.cuti+s.alpha;
+    const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
+    rows.push([
+      `"${s.outlet}"`, `"${s.nama}"`,
+      s.masuk, s.libur, s.cuti, s.alpha,
+      s.lemburHari, s.lemburJam,
+      `${terhitung}/${total}`
+    ].join(','));
+  });
+
+  // Trigger download
+  const csv = rows.join('\n');
+  const bom = '\uFEFF'; // UTF-8 BOM biar Excel render huruf benar
+  const blob = new Blob([bom + csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
+  link.download = `Rekap_Absensi_${bulanNama}_${tahun}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ File Excel (CSV) ter-download');
 }
 
 // ============================================================
