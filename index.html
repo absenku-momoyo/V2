@@ -577,6 +577,7 @@ body{min-height:100vh}
 // ============================================================
 const SUPABASE_URL = 'https://zbrwnybcsuyjvsafjbas.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpicndueWJjc3V5anZzYWZqYmFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjU1NjcsImV4cCI6MjA5MjEwMTU2N30.dgvSYVdOGflURKNiUrH_9ZiBl8pUPa0-diLyTu3M_aY';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOg9Skt1_hvQUM4VKBJgynOP-9gquTQKtuxe9G4R2_0KsZLCaz8pFBNkfIcqjG-8XA6Q/exec';
 
 // ============================================================
 // SUPABASE REST HELPERS
@@ -619,6 +620,46 @@ async function sbUpdate(table, data, filter){
     body: JSON.stringify(data)
   });
   return r.ok;
+}
+
+// Upload foto base64 ke Google Drive via Apps Script
+// Return URL foto, atau null kalau gagal
+async function uploadFotoToDrive(fotoBase64, nama, outlet, tanggal, tipe){
+  if(!fotoBase64) return null;
+  try {
+    const r = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      // NOTE: Apps Script doPost butuh text/plain biar tidak CORS-preflight
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'uploadFoto',
+        fotoBase64, nama, outlet, tanggal, tipe
+      })
+    });
+    const data = await r.json();
+    if(data.ok) return data.url || data.viewUrl || null;
+    console.warn('Upload foto gagal:', data);
+    return null;
+  } catch(e){
+    console.warn('Upload foto error:', e);
+    return null;
+  }
+}
+
+// Kirim notif telat ke owner via Apps Script → Telegram
+async function notifTelatOwner(nama, outlet, jamClockIn, jamMasuk, telatMenit){
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'notifTelat',
+        nama, outlet, jamClockIn, jamMasuk, telatMenit
+      })
+    });
+  } catch(e){
+    console.warn('Notif telat gagal:', e);
+  }
 }
 
 // ============================================================
@@ -1727,6 +1768,14 @@ async function submitClock(){
     } catch(e){}
 
     const shift = getExpectedShift(user.outlet, jam);
+
+    // Upload foto ke Drive (paralel, tidak block UI lama)
+    btn.textContent = 'Upload foto...';
+    const fotoUrl = await uploadFotoToDrive(
+      currentFotoBase64, user.nama, user.outlet, todayStr(), 'CI'
+    );
+
+    btn.textContent = 'Menyimpan...';
     const ok = await sbInsert('absensi', {
       tanggal: todayStr(),
       nama: user.nama,
@@ -1740,7 +1789,8 @@ async function submitClock(){
       status: 'masuk',
       lembur_jam: 0,
       outlet_asal: user.outlet,
-      perbantuan_ke: null
+      perbantuan_ke: null,
+      foto_url: fotoUrl
     });
 
     _clockSubmitting = false;
@@ -1751,6 +1801,14 @@ async function submitClock(){
       closeClockModal();
       await loadTodayAbsen();
       await loadRiwayat();
+
+      // Kirim notif telat ke owner (non-blocking)
+      const jamMasukMnt = toMenit(shift.masuk);
+      const jamClockInMnt = toMenit(jam);
+      const telat = jamClockInMnt - jamMasukMnt;
+      if(telat > 10){
+        notifTelatOwner(user.nama, user.outlet, jam, shift.masuk, telat);
+      }
     } else {
       showToast('❌ Gagal clock in, coba lagi');
       btn.disabled = false;
@@ -1766,13 +1824,25 @@ async function submitClock(){
     const lj = hitungLemburJam(jam, shift.pulang);
     const statusFinal = lj > 0 ? 'lembur' : 'masuk';
 
-    const ok = await sbUpdate('absensi', {
+    // Upload foto clock out ke Drive
+    btn.textContent = 'Upload foto...';
+    const fotoUrl = await uploadFotoToDrive(
+      currentFotoBase64, user.nama, user.outlet, todayStr(), 'CO'
+    );
+
+    btn.textContent = 'Menyimpan...';
+    const updatePayload = {
       clock_out: jam,
       status: statusFinal,
       lembur_jam: lj
-    }, 'nama=eq.'+encodeURIComponent(user.nama)+
-       '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
-       '&tanggal=eq.'+todayStr());
+    };
+    // Untuk clock out, foto_url append ke field yang sudah ada (pakai URL CO)
+    if(fotoUrl) updatePayload.foto_url = (crewTodayAbsen.foto_url || '') + (crewTodayAbsen.foto_url ? ' | ' : '') + fotoUrl;
+
+    const ok = await sbUpdate('absensi', updatePayload,
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&tanggal=eq.'+todayStr());
 
     _clockSubmitting = false;
     btn.textContent = 'Simpan';
