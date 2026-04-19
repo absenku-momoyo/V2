@@ -877,7 +877,7 @@ async function loadProfil(){
   if(crewData){
     const tier = hitungTier(crewData.tanggal_masuk, crewData.tanggal_keluar, crewData.gaji_custom);
     document.getElementById('profil-tier-chip').innerHTML = `<span class="tier-badge ${tier.cls}">${tier.tier} · Rp ${tier.gaji.toLocaleString('id-ID')}/hari</span>`;
-    document.getElementById('profil-masa').textContent = crewData.tanggal_masuk ? 'Masa kerja: '+formatMasaKerja(crewData.tanggal_masuk) : '';
+    document.getElementById('profil-masa').textContent = crewData.tanggal_masuk ? 'Masa kerja: '+formatMasaKerjaFull(crewData.tanggal_masuk) : '';
     document.getElementById('profil-rek').innerHTML = crewData.norek
       ? `<div>🏦 <b>${crewData.norek}</b></div><div style="font-size:11px;color:var(--text3);margin-top:4px">a/n ${crewData.atas_nama||'-'}</div>`
       : '<span style="color:var(--text3)">Belum ada info rekening</span>';
@@ -1234,15 +1234,16 @@ async function loadRekap(){
   window._rekapTahun = tahun;
   window._rekapOutletFilter = outletFilter;
 
-  if(!absensi || absensi.length === 0){
-    result.innerHTML = '<div class="card"><div class="empty-state">Belum ada data absensi untuk periode ini</div></div>';
+  const activeCrew = (crews || []).filter(c => c.aktif);
+  if((!absensi || absensi.length === 0) && activeCrew.length === 0){
+    result.innerHTML = '<div class="card"><div class="empty-state">Belum ada data absensi & tidak ada crew aktif di outlet ini</div></div>';
     return;
   }
 
   // Group absensi per outlet → crew
   const perOutletCrew = {};
   const detailMap = {};
-  absensi.forEach(a => {
+  (absensi || []).forEach(a => {
     const outKey = a.outlet_nama;
     if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
     if(!perOutletCrew[outKey][a.nama]) perOutletCrew[outKey][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
@@ -1256,6 +1257,17 @@ async function loadRekap(){
     const dKey = outKey+'|'+a.nama;
     if(!detailMap[dKey]) detailMap[dKey] = [];
     detailMap[dKey].push(a);
+  });
+
+  // Tambahkan crew AKTIF yang belum punya row absensi (dengan stat 0)
+  // Ini supaya crew baru / yang belum pernah absen tetap muncul di rekap
+  (crews || []).forEach(c => {
+    if(!c.aktif) return; // skip resigned
+    const outKey = c.outlet_nama;
+    if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
+    if(!perOutletCrew[outKey][c.nama]){
+      perOutletCrew[outKey][c.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    }
   });
   window._rekapDetail = detailMap;
 
@@ -1818,6 +1830,16 @@ async function doExportSlip(){
     else if(a.status==='alpha') s.alpha++;
   });
 
+  // Tambahkan crew aktif yang belum punya row absensi (supaya tampil di slip gaji)
+  (crews || []).forEach(c => {
+    if(!c.aktif) return;
+    const k = c.outlet_nama;
+    if(!perOutletCrew[k]) perOutletCrew[k] = {};
+    if(!perOutletCrew[k][c.nama]){
+      perOutletCrew[k][c.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    }
+  });
+
   const crewLookup = {};
   crews.forEach(c => { crewLookup[c.outlet_nama+'|'+c.nama] = c; });
 
@@ -1978,7 +2000,7 @@ async function doExportSlip(){
       const ins = insMap[outlet+'|'+nama];
       const g = hitungInfoGaji(c, s, ins);
 
-      const masa = c?.tanggal_masuk ? formatMasaKerja(c.tanggal_masuk) : '-';
+      const masa = c?.tanggal_masuk ? formatMasaKerjaFull(c.tanggal_masuk) : '-';
       const outletShort = outlet.replace('Momoyo ','').replace('AI-CHA ','');
       const rowData = [
         no++, outletShort, nama,
@@ -2080,7 +2102,7 @@ async function doExportSlip(){
     {width:17},  // Norek
     {width:26},  // Atas Nama
     {width:12},  // Tgl Masuk
-    {width:14},  // Masa Kerja
+    {width:26},  // Masa Kerja (widened for "5 bln (sejak 20 Nov 2025)")
     {width:11},  // Tier
     {width:11},  // Gaji/Hari
     {width:11},  // Terhitung
@@ -2985,11 +3007,28 @@ function formatMasaKerja(tglMasuk){
   return `${y} thn ${m} bln`;
 }
 
+// Format tanggal ke "DD MMM YYYY" Indonesia
+function formatTglID(tglStr){
+  if(!tglStr) return '-';
+  try {
+    const d = new Date(tglStr);
+    if(isNaN(d)) return tglStr;
+    const bln = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()];
+    return `${String(d.getDate()).padStart(2,'0')} ${bln} ${d.getFullYear()}`;
+  } catch(e){ return tglStr; }
+}
+
+// Masa kerja + tanggal join dalam 1 baris
+function formatMasaKerjaFull(tglMasuk){
+  if(!tglMasuk) return '-';
+  return `${formatMasaKerja(tglMasuk)} (sejak ${formatTglID(tglMasuk)})`;
+}
+
 function tierInfoHTML(tglMasuk, tglKeluar, gajiCustom){
   const t = hitungTier(tglMasuk, tglKeluar, gajiCustom);
-  const masa = formatMasaKerja(tglMasuk);
+  const masa = formatMasaKerjaFull(tglMasuk);
   if(t.tier === 'Resign') return `Status: <b>Resign</b>`;
-  return `Masa kerja: <b>${masa}</b> · Tier: <b>${t.tier}</b> · Gaji: <b>Rp ${t.gaji.toLocaleString('id-ID')}/hari</b>`;
+  return `${masa} · Tier: <b>${t.tier}</b> · Gaji: <b>Rp ${t.gaji.toLocaleString('id-ID')}/hari</b>`;
 }
 
 // ============================================================
