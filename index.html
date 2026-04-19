@@ -155,6 +155,19 @@ body{min-height:100vh}
 .rekap-outlet-summary{display:flex;justify-content:space-around;background:var(--surface2);padding:8px;border-radius:8px;margin-bottom:10px;font-size:11px}
 .rekap-outlet-summary > div{text-align:center}
 .rekap-outlet-summary b{display:block;font-size:16px;color:var(--text);font-weight:700}
+
+/* Mini calendar */
+.mini-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mini-cal-head{text-align:center;font-size:10px;color:var(--text3);font-weight:700;padding:4px 0}
+.mini-cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;font-weight:700;background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
+.mini-cal-cell.empty{background:transparent;border:none}
+.mini-cal-cell.weekend{background:var(--surface2);color:var(--text3)}
+.mini-cal-cell.masuk{background:var(--green);color:white;border-color:var(--green)}
+.mini-cal-cell.lembur{background:var(--amber);color:white;border-color:var(--amber);position:relative}
+.mini-cal-cell.lembur::after{content:attr(data-jam);position:absolute;bottom:1px;right:3px;font-size:8px;font-weight:400}
+.mini-cal-cell.libur{background:var(--purple);color:white;border-color:var(--purple)}
+.mini-cal-cell.cuti{background:var(--blue);color:white;border-color:var(--blue)}
+.mini-cal-cell.alpha{background:var(--red);color:white;border-color:var(--red)}
 </style>
 </head>
 <body>
@@ -287,6 +300,19 @@ body{min-height:100vh}
       <div id="profil-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
       <div id="profil-terhitung" style="margin-top:10px"></div>
       <div id="profil-formula" style="font-size:11px;color:var(--text2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-top:8px;line-height:1.5"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl" id="cal-label">📅 Kalender Absensi</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px">
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--green);border-radius:3px;display:inline-block"></span>Masuk</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--amber);border-radius:3px;display:inline-block"></span>Lembur</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--blue);border-radius:3px;display:inline-block"></span>Cuti</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--purple);border-radius:3px;display:inline-block"></span>Libur</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--red);border-radius:3px;display:inline-block"></span>Alpha</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;display:inline-block"></span>Sabtu/Minggu</span>
+      </div>
+      <div id="profil-kalender"></div>
     </div>
 
     <div class="card">
@@ -857,6 +883,56 @@ async function loginCrew(){
 }
 
 // ============================================================
+// MINI CALENDAR (render kalender 7 kolom × n baris)
+// ============================================================
+function renderMiniCalendar(bulan, tahun, absensiMap){
+  const el = document.getElementById('profil-kalender');
+  if(!el) return;
+
+  const daysInMonth = new Date(tahun, bulan, 0).getDate();
+  const firstDay = new Date(tahun, bulan-1, 1).getDay(); // 0=Minggu
+  const hariHead = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+  let html = '<div class="mini-cal">';
+  // Header hari
+  hariHead.forEach(h => {
+    html += `<div class="mini-cal-head">${h}</div>`;
+  });
+
+  // Empty cells sebelum tanggal 1
+  for(let i = 0; i < firstDay; i++){
+    html += '<div class="mini-cal-cell empty"></div>';
+  }
+
+  // Tanggal 1 - n
+  for(let d = 1; d <= daysInMonth; d++){
+    const dow = new Date(tahun, bulan-1, d).getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    const abs = absensiMap[d];
+
+    let cls = 'mini-cal-cell';
+    let extra = '';
+    if(abs){
+      if(abs.status === 'masuk') cls += ' masuk';
+      else if(abs.status === 'lembur'){
+        cls += ' lembur';
+        extra = `data-jam="${abs.lembur_jam}"`;
+      }
+      else if(abs.status === 'libur') cls += ' libur';
+      else if(abs.status === 'cuti') cls += ' cuti';
+      else if(abs.status === 'alpha') cls += ' alpha';
+    } else if(isWeekend){
+      cls += ' weekend';
+    }
+
+    html += `<div class="${cls}" ${extra}>${d}</div>`;
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ============================================================
 // CREW: LOAD PROFIL (dipanggil saat buka tab profil)
 // ============================================================
 async function loadProfil(){
@@ -896,6 +972,7 @@ async function loadProfil(){
   document.getElementById('rekap-label').textContent = `📊 Rekap ${bulanNama} ${tahun}`;
 
   let masuk=0, libur=0, cuti=0, alpha=0, lemburHari=0, lemburJam=0;
+  const absensiMap = {}; // key: day number → {status, lembur_jam}
   try {
     const absensi = await sbGet('absensi',
       'nama=eq.'+encodeURIComponent(user.nama)+
@@ -908,6 +985,19 @@ async function loadProfil(){
       else if(a.status==='libur'){ libur++; }
       else if(a.status==='cuti'){ cuti++; }
       else if(a.status==='alpha'){ alpha++; }
+
+      // Map tanggal ke day number
+      // Format tanggal di DB: "DD/MM/YYYY"
+      const parts = (a.tanggal||'').split('/');
+      if(parts.length === 3){
+        const dayNum = parseInt(parts[0]);
+        if(!isNaN(dayNum)){
+          absensiMap[dayNum] = {
+            status: a.status,
+            lembur_jam: parseInt(a.lembur_jam)||0
+          };
+        }
+      }
     });
   } catch(e){}
 
@@ -951,6 +1041,10 @@ async function loadProfil(){
   document.getElementById('profil-formula').innerHTML = hasAlpha
     ? `⚠️ Ada <b>${alpha}</b> alpha → libur <b>${libur} hari hangus</b> tidak dibayar<br>Terhitung = masuk + cuti = ${masuk} + ${cuti} = <b>${terhitung}</b>`
     : `✅ Tidak ada alpha → libur & cuti dibayar<br>Terhitung = masuk + libur + cuti = ${masuk} + ${libur} + ${cuti} = <b>${terhitung}</b>`;
+
+  // Render mini calendar
+  document.getElementById('cal-label').textContent = `📅 Kalender ${bulanNama} ${tahun}`;
+  renderMiniCalendar(bulan, tahun, absensiMap);
 
   // Estimasi gaji
   if(crewData){
