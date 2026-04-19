@@ -669,7 +669,7 @@ function setRole(r){
 async function loadOutlets(){
   const sel = document.getElementById('li-outlet');
   try {
-    const data = await sbGet('outlets', 'select=id,nama,lat,lng,radius,password&order=nama');
+    const data = await sbGet('outlets', 'select=id,nama,lat,lng,radius,password&order=id');
     OUTLETS = data;
     sel.innerHTML = '<option value="">Pilih outlet...</option>' +
       data.map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
@@ -869,7 +869,7 @@ async function loadProfil(){
   if(crewData){
     const tier = hitungTier(crewData.tanggal_masuk, crewData.tanggal_keluar, crewData.gaji_custom);
     const gajiPokok = tier.gaji * terhitung;
-    const LEMBUR_PER_JAM = 10000; // placeholder — bisa disetting nanti
+    const LEMBUR_PER_JAM = 15000;
     const gajiLembur = lemburJam * LEMBUR_PER_JAM;
 
     // Ambil insentif & bonus bulan ini
