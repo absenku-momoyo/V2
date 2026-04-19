@@ -1385,15 +1385,15 @@ function showDetailCrew(key){
 }
 
 // ============================================================
-// EXPORT REKAP (rekap bulanan lengkap per crew)
+// EXPORT REKAP (rekap bulanan visual per outlet) — pakai ExcelJS
 // ============================================================
 function exportRekapExcel(){
   const absensi = window._rekapAbsensi || [];
   if(absensi.length === 0){ showToast('❌ Tampilkan rekap dulu'); return; }
-  if(typeof XLSX === 'undefined'){
+  if(typeof ExcelJS === 'undefined'){
     showToast('⏳ Loading library...');
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
     script.onload = () => doExportRekap();
     script.onerror = () => showToast('❌ Gagal load library');
     document.head.appendChild(script);
@@ -1402,138 +1402,377 @@ function exportRekapExcel(){
   }
 }
 
-function doExportRekap(){
+async function doExportRekap(){
   const absensi = window._rekapAbsensi;
   const crews = window._rekapCrews || [];
-  const insMap = window._rekapInsMap || {};
   const bulan = window._rekapBulan;
   const tahun = window._rekapTahun;
   const outletFilter = window._rekapOutletFilter;
-  const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][bulan-1];
+  const bulanShort = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
+  const daysInMonth = new Date(tahun, bulan, 0).getDate();
+  const hariShort = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
 
-  // Group absensi
-  const perOutletCrew = {};
-  const detailMap = {};
+  // Build nested map: outlet → nama → tanggal(dd/mm/yyyy) → absensi
+  const byOutlet = {};
   absensi.forEach(a => {
-    const k = a.outlet_nama;
-    if(!perOutletCrew[k]) perOutletCrew[k] = {};
-    if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
-    const s = perOutletCrew[k][a.nama];
+    if(!byOutlet[a.outlet_nama]) byOutlet[a.outlet_nama] = {};
+    if(!byOutlet[a.outlet_nama][a.nama]) byOutlet[a.outlet_nama][a.nama] = {};
+    byOutlet[a.outlet_nama][a.nama][a.tanggal] = a;
+  });
+
+  // Stats per crew
+  const statsByCrew = {};
+  absensi.forEach(a => {
+    const k = a.outlet_nama+'|'+a.nama;
+    if(!statsByCrew[k]) statsByCrew[k] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = statsByCrew[k];
     if(a.status==='masuk') s.masuk++;
     else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
     else if(a.status==='libur') s.libur++;
     else if(a.status==='cuti') s.cuti++;
     else if(a.status==='alpha') s.alpha++;
-
-    const dk = a.outlet_nama+'|'+a.nama;
-    if(!detailMap[dk]) detailMap[dk] = {};
-    detailMap[dk][a.tanggal] = a;
   });
 
   const crewLookup = {};
   crews.forEach(c => { crewLookup[c.outlet_nama+'|'+c.nama] = c; });
 
-  const wb = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Momoyo AbsenKu V2';
+  wb.created = new Date();
 
-  // =========================================================
-  // SHEET 1: RINGKASAN (semua crew, per outlet, dengan tier+persen)
-  // =========================================================
-  const sumRows = [['No','Outlet','Nama','Nama Panggilan','Tgl Masuk','Tier','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Total Tercatat','Terhitung','% Kehadiran']];
+  const COLOR = {
+    red: 'FFDC2626', redLight: 'FFFCA5A5', redBg: 'FFFEE2E2',
+    amber: 'FFD97706', amberBg: 'FFFEF3C7',
+    green: 'FF16A34A', greenBg: 'FFDCFCE7', greenLight: 'FFBBF7D0',
+    blue: 'FF1D4ED8', blueBg: 'FFEFF6FF',
+    purple: 'FF6D28D9', purpleBg: 'FFEDE9FE',
+    white: 'FFFFFFFF', black: 'FF111827',
+    grayBg: 'FFF3F4F6', grayMed: 'FFE5E7EB'
+  };
+
+  const border = {
+    top:    {style:'thin', color:{argb:'FFE5E7EB'}},
+    left:   {style:'thin', color:{argb:'FFE5E7EB'}},
+    bottom: {style:'thin', color:{argb:'FFE5E7EB'}},
+    right:  {style:'thin', color:{argb:'FFE5E7EB'}}
+  };
+
+  // =====================================================
+  // SHEET 1: RINGKASAN SEMUA OUTLET
+  // =====================================================
+  const wsSum = wb.addWorksheet('Ringkasan');
+  wsSum.mergeCells('A1:J1');
+  const sumTitle = wsSum.getCell('A1');
+  sumTitle.value = `RINGKASAN ABSENSI · ${bulanNama.toUpperCase()} ${tahun}`;
+  sumTitle.font = {bold:true, size:14, color:{argb:COLOR.white}};
+  sumTitle.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+  sumTitle.alignment = {horizontal:'center', vertical:'middle'};
+  wsSum.getRow(1).height = 28;
+
+  const sumHeader = ['No','Outlet','Nama','Tier','Masuk','Libur','Cuti','Alpha','Lembur Jam','% Kehadiran'];
+  sumHeader.forEach((h, i) => {
+    const cell = wsSum.getCell(3, i+1);
+    cell.value = h;
+    cell.font = {bold:true, color:{argb:COLOR.white}};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+    cell.alignment = {horizontal:'center', vertical:'middle'};
+    cell.border = border;
+  });
+  wsSum.getRow(3).height = 26;
+
+  let sRow = 4;
   let idx = 1;
   const outletOrder = OUTLETS.map(o => o.nama);
   outletOrder.forEach(outlet => {
-    if(!perOutletCrew[outlet]) return;
-    const namaList = Object.keys(perOutletCrew[outlet]).sort();
+    if(!byOutlet[outlet]) return;
+    const namaList = Object.keys(byOutlet[outlet]).sort();
     namaList.forEach(nama => {
-      const s = perOutletCrew[outlet][nama];
+      const s = statsByCrew[outlet+'|'+nama];
       const c = crewLookup[outlet+'|'+nama];
       const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom);
-      const total = s.masuk + s.libur + s.cuti + s.alpha;
-      const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
-      const pct = total > 0 ? Math.round((s.masuk / total) * 100) : 0;
-      sumRows.push([
-        idx++, outlet, nama,
-        c?.nama_panggilan || '',
-        c?.tanggal_masuk || '',
-        tier.tier,
-        s.masuk, s.libur, s.cuti, s.alpha,
-        s.lemburHari, s.lemburJam,
-        total, terhitung,
-        pct + '%'
-      ]);
+      const total = s.masuk+s.libur+s.cuti+s.alpha;
+      const pct = total > 0 ? Math.round((s.masuk/total)*100) : 0;
+
+      const vals = [idx++, outlet, nama, tier.tier, s.masuk, s.libur, s.cuti, s.alpha, s.lemburJam, pct+'%'];
+      vals.forEach((v, i) => {
+        const cell = wsSum.getCell(sRow, i+1);
+        cell.value = v;
+        cell.border = border;
+        cell.alignment = {horizontal: i<=3 ? (i===0?'center':'left') : 'center', vertical:'middle'};
+      });
+
+      // Alpha merah
+      if(s.alpha > 0){
+        const alphaCell = wsSum.getCell(sRow, 8);
+        alphaCell.font = {bold:true, color:{argb:COLOR.red}};
+        alphaCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
+      }
+      // Lembur amber
+      if(s.lemburJam > 0){
+        const lCell = wsSum.getCell(sRow, 9);
+        lCell.font = {bold:true, color:{argb:COLOR.amber}};
+        lCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.amberBg}};
+      }
+      // % kehadiran color
+      const pctCell = wsSum.getCell(sRow, 10);
+      if(s.alpha > 0){
+        pctCell.font = {bold:true, color:{argb:COLOR.red}};
+        pctCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
+      } else if(pct >= 90){
+        pctCell.font = {bold:true, color:{argb:COLOR.green}};
+        pctCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.greenBg}};
+      } else {
+        pctCell.font = {bold:true, color:{argb:COLOR.amber}};
+        pctCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.amberBg}};
+      }
+      sRow++;
     });
   });
-  const ws1 = XLSX.utils.aoa_to_sheet(sumRows);
-  ws1['!cols'] = [{wch:4},{wch:22},{wch:26},{wch:15},{wch:12},{wch:10},{wch:7},{wch:7},{wch:7},{wch:7},{wch:13},{wch:13},{wch:14},{wch:11},{wch:13}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
 
-  // =========================================================
-  // SHEET 2: KALENDER (per crew × tanggal × status)
-  // =========================================================
-  const daysInMonth = new Date(tahun, bulan, 0).getDate();
-  const hariNama = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
-  const calHeader = ['Outlet','Nama','Tier'];
-  for(let d=1; d<=daysInMonth; d++){
-    const dt = new Date(tahun, bulan-1, d);
-    calHeader.push(`${d} ${hariNama[dt.getDay()]}`);
-  }
-  calHeader.push('Masuk','Libur','Cuti','Alpha','Lbr Jam','Terhitung');
-  const calRows = [calHeader];
+  wsSum.columns = [{width:5},{width:24},{width:28},{width:10},{width:9},{width:9},{width:9},{width:9},{width:11},{width:13}];
+
+  // =====================================================
+  // SHEETS: Per-outlet visual calendar
+  // =====================================================
+  const outletIndex = {};
+  outletOrder.forEach((o, i) => { outletIndex[o] = i+1; });
 
   outletOrder.forEach(outlet => {
-    if(!perOutletCrew[outlet]) return;
-    const namaList = Object.keys(perOutletCrew[outlet]).sort();
-    namaList.forEach(nama => {
-      const s = perOutletCrew[outlet][nama];
-      const c = crewLookup[outlet+'|'+nama];
-      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom);
-      const row = [outlet, nama, tier.tier];
-      for(let d=1; d<=daysInMonth; d++){
-        const dd = String(d).padStart(2,'0');
-        const mm = String(bulan).padStart(2,'0');
-        const tglKey = `${dd}/${mm}/${tahun}`;
-        const abs = (detailMap[outlet+'|'+nama] || {})[tglKey];
-        if(!abs){ row.push(''); continue; }
-        if(abs.status === 'masuk') row.push('✓');
-        else if(abs.status === 'lembur') row.push('⏰'+(abs.lembur_jam||''));
-        else if(abs.status === 'libur') row.push('L');
-        else if(abs.status === 'cuti') row.push('C');
-        else if(abs.status === 'alpha') row.push('✕');
-        else row.push('?');
-      }
+    if(!byOutlet[outlet]) return;
+    const namaList = Object.keys(byOutlet[outlet]).sort();
+    if(namaList.length === 0) return;
+
+    // Sheet name: "01-Sumbersari" (hanya max 31 chars)
+    const shortName = outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ');
+    const idx = String(outletIndex[outlet] || 0).padStart(2,'0');
+    let sheetName = `${idx}-${shortName}`.substring(0,31);
+
+    const ws = wb.addWorksheet(sheetName);
+
+    // Layout: per crew ambil 7 kolom (TGL, HARI, MASUK, LIBUR, CUTI, ALPHA, LEMBUR, PERBANTUAN)
+    // Actually let's do 7 cols: TGL | HARI | MASUK | LIBUR | CUTI | ALPHA | LEMBUR | (skip perbantuan for now, simpler)
+    // But user's reference has PERBANTUAN column. Let's include it but leave empty for now.
+    const COLS_PER_CREW = 7; // TGL, HARI, MASUK, LIBUR, CUTI, ALPHA, LEMBUR
+    const GAP = 1; // 1 empty col between crews? No — user reference shows no gap. Let's put directly.
+    // Actually looking at reference more carefully: columns are tightly packed. Let's do no gap.
+
+    // TITLE ROW
+    const totalCols = namaList.length * COLS_PER_CREW;
+    ws.mergeCells(1, 1, 1, Math.max(totalCols, 7));
+    const t = ws.getCell(1, 1);
+    t.value = `REKAP ABSENSI  ·  ${outlet.toUpperCase()}  ·  ${bulanNama.toUpperCase()} ${tahun}`;
+    t.font = {bold:true, size:14, color:{argb:COLOR.white}};
+    t.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+    t.alignment = {horizontal:'center', vertical:'middle'};
+    ws.getRow(1).height = 30;
+
+    // ROW 2: blank
+    ws.getRow(2).height = 6;
+
+    // ROW 3: CREW NAME (merge 7 cols per crew)
+    namaList.forEach((nama, ni) => {
+      const startCol = ni * COLS_PER_CREW + 1;
+      const endCol = startCol + COLS_PER_CREW - 1;
+      ws.mergeCells(3, startCol, 3, endCol);
+      const cell = ws.getCell(3, startCol);
+      cell.value = nama.toUpperCase();
+      cell.font = {bold:true, color:{argb:COLOR.white}, size:12};
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+      cell.alignment = {horizontal:'center', vertical:'middle'};
+      cell.border = border;
+    });
+    ws.getRow(3).height = 24;
+
+    // ROW 4: Sub-header (TGL, HARI, MASUK, LIBUR, CUTI, ALPHA, LEMBUR)
+    const subHeaders = ['TGL','HARI','MASUK','LIBUR','CUTI','ALPHA','LEMBUR'];
+    namaList.forEach((nama, ni) => {
+      subHeaders.forEach((h, hi) => {
+        const col = ni * COLS_PER_CREW + hi + 1;
+        const cell = ws.getCell(4, col);
+        cell.value = h;
+        cell.font = {bold:true, color:{argb:COLOR.blue}, size:10};
+        cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blueBg}};
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.border = border;
+      });
+    });
+    ws.getRow(4).height = 20;
+
+    // DATA ROWS: for each day of month
+    for(let d=1; d<=daysInMonth; d++){
+      const rowNum = 4 + d;
+      const dt = new Date(tahun, bulan-1, d);
+      const dow = dt.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+
+      const dd = String(d).padStart(2,'0');
+      const mm = String(bulan).padStart(2,'0');
+      const tglKey = `${dd}/${mm}/${tahun}`;
+
+      namaList.forEach((nama, ni) => {
+        const startCol = ni * COLS_PER_CREW + 1;
+        const abs = byOutlet[outlet][nama][tglKey];
+
+        // TGL
+        let cell = ws.getCell(rowNum, startCol);
+        cell.value = d;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.border = border;
+        cell.font = {size:10};
+
+        // HARI
+        cell = ws.getCell(rowNum, startCol+1);
+        cell.value = hariShort[dow];
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.border = border;
+        cell.font = {size:10};
+
+        // MASUK (col +2)
+        cell = ws.getCell(rowNum, startCol+2);
+        cell.border = border;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.font = {size:10};
+        if(abs && (abs.status === 'masuk' || abs.status === 'lembur')){
+          cell.value = '✓';
+          cell.font = {bold:true, color:{argb:COLOR.green}, size:12};
+          cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.greenBg}};
+        }
+
+        // LIBUR (col +3)
+        cell = ws.getCell(rowNum, startCol+3);
+        cell.border = border;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.font = {size:10};
+        if(abs && abs.status === 'libur'){
+          cell.value = '✓';
+          cell.font = {bold:true, color:{argb:COLOR.purple}, size:12};
+          cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.purpleBg}};
+        }
+
+        // CUTI (col +4)
+        cell = ws.getCell(rowNum, startCol+4);
+        cell.border = border;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.font = {size:10};
+        if(abs && abs.status === 'cuti'){
+          cell.value = '✓';
+          cell.font = {bold:true, color:{argb:COLOR.blue}, size:12};
+          cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blueBg}};
+        }
+
+        // ALPHA (col +5)
+        cell = ws.getCell(rowNum, startCol+5);
+        cell.border = border;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.font = {size:10};
+        if(abs && abs.status === 'alpha'){
+          cell.value = '✓';
+          cell.font = {bold:true, color:{argb:COLOR.red}, size:12};
+          cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
+        }
+
+        // LEMBUR (col +6)
+        cell = ws.getCell(rowNum, startCol+6);
+        cell.border = border;
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.font = {size:10};
+        if(abs && abs.lembur_jam > 0){
+          cell.value = abs.lembur_jam;
+          cell.font = {bold:true, color:{argb:COLOR.amber}, size:11};
+          cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.amberBg}};
+        }
+
+        // Weekend highlight — TGL & HARI jadi greenLight
+        if(isWeekend){
+          const tglC = ws.getCell(rowNum, startCol);
+          const hariC = ws.getCell(rowNum, startCol+1);
+          tglC.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.greenLight}};
+          hariC.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.greenLight}};
+          tglC.font = {bold:true, size:10};
+          hariC.font = {bold:true, size:10};
+        }
+      });
+      ws.getRow(rowNum).height = 18;
+    }
+
+    // SUMMARY ROW at bottom
+    const summaryRow = 4 + daysInMonth + 2;
+    namaList.forEach((nama, ni) => {
+      const s = statsByCrew[outlet+'|'+nama];
+      const startCol = ni * COLS_PER_CREW + 1;
       const total = s.masuk + s.libur + s.cuti + s.alpha;
       const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
-      row.push(s.masuk, s.libur, s.cuti, s.alpha, s.lemburJam, `${terhitung}/${total}`);
-      calRows.push(row);
+
+      // Merge cells for label
+      ws.mergeCells(summaryRow, startCol, summaryRow, startCol+1);
+      const lblCell = ws.getCell(summaryRow, startCol);
+      lblCell.value = 'TOTAL';
+      lblCell.font = {bold:true, color:{argb:COLOR.white}};
+      lblCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+      lblCell.alignment = {horizontal:'center', vertical:'middle'};
+      lblCell.border = border;
+
+      // Values
+      const vals = [s.masuk, s.libur, s.cuti, s.alpha, s.lemburJam];
+      vals.forEach((v, vi) => {
+        const cell = ws.getCell(summaryRow, startCol+2+vi);
+        cell.value = v;
+        cell.font = {bold:true, color:{argb:COLOR.white}};
+        cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+        cell.alignment = {horizontal:'center', vertical:'middle'};
+        cell.border = border;
+      });
     });
-  });
-  const ws2 = XLSX.utils.aoa_to_sheet(calRows);
-  const calCols = [{wch:20},{wch:25},{wch:10}];
-  for(let d=1; d<=daysInMonth; d++) calCols.push({wch:7});
-  calCols.push({wch:8},{wch:7},{wch:7},{wch:7},{wch:8},{wch:10});
-  ws2['!cols'] = calCols;
-  XLSX.utils.book_append_sheet(wb, ws2, 'Kalender');
+    ws.getRow(summaryRow).height = 22;
 
-  // =========================================================
-  // SHEET 3: DETAIL HARIAN (raw data)
-  // =========================================================
-  const detailRows = [['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur Jam','Jarak GPS','Foto URL']];
-  absensi.forEach(a => {
-    detailRows.push([
-      a.outlet_nama||'', a.nama||'', a.tanggal||'',
-      a.shift||'', a.clock_in||'', a.clock_out||'',
-      a.status||'', a.lembur_jam||0, a.jarak||'',
-      a.foto_url||''
-    ]);
-  });
-  const ws3 = XLSX.utils.aoa_to_sheet(detailRows);
-  ws3['!cols'] = [{wch:22},{wch:26},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:11},{wch:11},{wch:50}];
-  XLSX.utils.book_append_sheet(wb, ws3, 'Detail Harian');
+    // TERHITUNG row
+    const terhitungRow = summaryRow + 1;
+    namaList.forEach((nama, ni) => {
+      const s = statsByCrew[outlet+'|'+nama];
+      const startCol = ni * COLS_PER_CREW + 1;
+      const total = s.masuk + s.libur + s.cuti + s.alpha;
+      const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
 
+      ws.mergeCells(terhitungRow, startCol, terhitungRow, startCol+COLS_PER_CREW-1);
+      const cell = ws.getCell(terhitungRow, startCol);
+      cell.value = `TERHITUNG: ${terhitung}/${total} hari${s.alpha>0?' ⚠️':''}`;
+      cell.font = {bold:true, color:{argb: s.alpha>0 ? COLOR.red : COLOR.green}, size:11};
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb: s.alpha>0 ? COLOR.redBg : COLOR.greenBg}};
+      cell.alignment = {horizontal:'center', vertical:'middle'};
+      cell.border = border;
+    });
+    ws.getRow(terhitungRow).height = 22;
+
+    // Column widths
+    const colWidths = [];
+    namaList.forEach(() => {
+      colWidths.push({width:5});   // TGL
+      colWidths.push({width:7});   // HARI
+      colWidths.push({width:8});   // MASUK
+      colWidths.push({width:8});   // LIBUR
+      colWidths.push({width:8});   // CUTI
+      colWidths.push({width:8});   // ALPHA
+      colWidths.push({width:9});   // LEMBUR
+    });
+    ws.columns = colWidths;
+
+    // Freeze: title + crew name rows
+    ws.views = [{state:'frozen', ySplit:4}];
+  });
+
+  // Download
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
   const fname = outletFilter
-    ? `Rekap_${outletFilter.replace(/ /g,'_')}_${bulanNama}_${tahun}.xlsx`
-    : `Rekap_Semua_${bulanNama}_${tahun}.xlsx`;
-  XLSX.writeFile(wb, fname);
+    ? `Rekap_${outletFilter.replace(/ /g,'_')}_${bulanShort}_${tahun}.xlsx`
+    : `Rekap_Absensi_${bulanShort}_${tahun}.xlsx`;
+  link.download = fname;
+  link.click();
+  URL.revokeObjectURL(url);
   showToast('✅ Rekap Excel ter-download');
 }
 
