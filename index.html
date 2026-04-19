@@ -1300,37 +1300,51 @@ function showDetailCrew(key){
   modal.classList.add('show');
 }
 
-// Export rekap ke Excel (CSV yang bisa dibuka di Excel)
+// Export rekap ke Excel .xlsx (pakai SheetJS, auto-split kolom)
 function exportRekapExcel(){
   const absensi = window._rekapAbsensi || [];
   const bulan = window._rekapBulan;
   const tahun = window._rekapTahun;
   if(absensi.length === 0){ showToast('Belum ada data'); return; }
 
-  // Buat CSV: header + rows
-  const headers = ['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur (jam)','Jarak GPS','Foto URL'];
-  const rows = [headers.join(',')];
+  // Load SheetJS library on-demand
+  if(typeof XLSX === 'undefined'){
+    showToast('⏳ Loading library...');
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.onload = () => doExportExcel();
+    script.onerror = () => showToast('❌ Gagal load library, cek internet');
+    document.head.appendChild(script);
+  } else {
+    doExportExcel();
+  }
+}
+
+function doExportExcel(){
+  const absensi = window._rekapAbsensi || [];
+  const bulan = window._rekapBulan;
+  const tahun = window._rekapTahun;
+
+  // Sheet 1: Detail absensi harian
+  const detailData = [
+    ['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur (jam)','Jarak GPS (m)','Foto URL']
+  ];
   absensi.forEach(a => {
-    const row = [
-      `"${a.outlet_nama||''}"`,
-      `"${a.nama||''}"`,
-      `"${a.tanggal||''}"`,
-      `"${a.shift||''}"`,
-      `"${a.clock_in||''}"`,
-      `"${a.clock_out||''}"`,
-      `"${a.status||''}"`,
+    detailData.push([
+      a.outlet_nama||'',
+      a.nama||'',
+      a.tanggal||'',
+      a.shift||'',
+      a.clock_in||'',
+      a.clock_out||'',
+      a.status||'',
       a.lembur_jam||0,
       a.jarak||'',
-      `"${a.foto_url||''}"`
-    ];
-    rows.push(row.join(','));
+      a.foto_url||''
+    ]);
   });
 
-  // Summary sheet as second section
-  rows.push('');
-  rows.push('=== RINGKASAN PER CREW ===');
-  rows.push(['Outlet','Nama','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Terhitung/Total'].join(','));
-
+  // Sheet 2: Ringkasan per crew
   const perCrew = {};
   absensi.forEach(a => {
     const k = a.outlet_nama+'|'+a.nama;
@@ -1342,29 +1356,46 @@ function exportRekapExcel(){
     else if(a.status==='cuti') s.cuti++;
     else if(a.status==='alpha') s.alpha++;
   });
+
+  const summaryData = [
+    ['Outlet','Nama','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Total Tercatat','Terhitung']
+  ];
   Object.values(perCrew).sort((a,b)=>a.outlet.localeCompare(b.outlet)||a.nama.localeCompare(b.nama)).forEach(s => {
     const total = s.masuk+s.libur+s.cuti+s.alpha;
     const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
-    rows.push([
-      `"${s.outlet}"`, `"${s.nama}"`,
+    summaryData.push([
+      s.outlet, s.nama,
       s.masuk, s.libur, s.cuti, s.alpha,
       s.lemburHari, s.lemburJam,
-      `${terhitung}/${total}`
-    ].join(','));
+      total, terhitung
+    ]);
   });
 
-  // Trigger download
-  const csv = rows.join('\n');
-  const bom = '\uFEFF'; // UTF-8 BOM biar Excel render huruf benar
-  const blob = new Blob([bom + csv], {type: 'text/csv;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
+  // Build workbook
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+  const ws2 = XLSX.utils.aoa_to_sheet(detailData);
+
+  // Auto-width kolom (biar nggak sempit)
+  const setColWidths = (ws, data) => {
+    const widths = data[0].map((_, colIdx) => {
+      const maxLen = data.reduce((max, row) => {
+        const cell = String(row[colIdx]||'');
+        return Math.max(max, cell.length);
+      }, 0);
+      return { wch: Math.min(Math.max(maxLen+2, 10), 50) };
+    });
+    ws['!cols'] = widths;
+  };
+  setColWidths(ws1, summaryData);
+  setColWidths(ws2, detailData);
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Detail Harian');
+
   const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
-  link.download = `Rekap_Absensi_${bulanNama}_${tahun}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-  showToast('✅ File Excel (CSV) ter-download');
+  XLSX.writeFile(wb, `Rekap_Absensi_${bulanNama}_${tahun}.xlsx`);
+  showToast('✅ File Excel ter-download');
 }
 
 // ============================================================
