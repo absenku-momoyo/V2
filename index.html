@@ -1538,15 +1538,15 @@ function doExportRekap(){
 }
 
 // ============================================================
-// EXPORT SLIP GAJI (hitungan gaji per crew)
+// EXPORT SLIP GAJI (hitungan gaji per crew) — pakai ExcelJS untuk styling
 // ============================================================
 function exportSlipGaji(){
   const absensi = window._rekapAbsensi || [];
   if(absensi.length === 0){ showToast('❌ Tampilkan rekap dulu'); return; }
-  if(typeof XLSX === 'undefined'){
+  if(typeof ExcelJS === 'undefined'){
     showToast('⏳ Loading library...');
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
     script.onload = () => doExportSlip();
     script.onerror = () => showToast('❌ Gagal load library');
     document.head.appendChild(script);
@@ -1555,7 +1555,7 @@ function exportSlipGaji(){
   }
 }
 
-function doExportSlip(){
+async function doExportSlip(){
   const absensi = window._rekapAbsensi;
   const crews = window._rekapCrews || [];
   const insMap = window._rekapInsMap || {};
@@ -1582,33 +1582,154 @@ function doExportSlip(){
   const crewLookup = {};
   crews.forEach(c => { crewLookup[c.outlet_nama+'|'+c.nama] = c; });
 
-  // Tanggal gajian = akhir bulan
   const lastDay = new Date(tahun, bulan, 0).getDate();
   const tglGajianStr = `${lastDay} ${bulanNama} ${tahun}`;
 
-  // Build rows
-  const rows = [];
-  // Title
-  rows.push([`REKAP GAJI · ${bulanNama.toUpperCase()} ${tahun} · MOMOYO ICE CREAM & AI-CHA`]);
-  rows.push([]);
-  rows.push(['Tanggal Gajian:', '', '', tglGajianStr]);
-  rows.push(['KETERANGAN TIER:', 'Training (<14 hari) · Rp 45.000', 'Tier 3 (<1th1bln) · Rp 60.000', 'Tier 2 (≥1th1bln) · Rp 67.500', 'Tier 1 (≥2th7bln) · Rp 75.000', 'Lembur · Rp 15.000/jam']);
-  rows.push([]);
-  // Header
-  const header = ['NO','OUTLET','NAMA','NOREK','ATAS NAMA','TGL MASUK','MASA KERJA','TIER','GAJI/HARI','TERHITUNG','JUMLAH','LEMBUR JAM','JML LEMBUR','INSENTIF','BONUS','TOTAL'];
-  rows.push(header);
+  // ===== EXCEL WORKBOOK =====
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Momoyo AbsenKu V2';
+  wb.created = new Date();
 
+  const ws = wb.addWorksheet('Rekap Gaji', {
+    views: [{state:'frozen', xSplit:3, ySplit:6}]
+  });
+
+  // Definisikan warna
+  const COLOR = {
+    red: 'FFDC2626',
+    redLight: 'FFFCA5A5',
+    redBg: 'FFFEE2E2',
+    amber: 'FFD97706',
+    amberBg: 'FFFEF3C7',
+    green: 'FF16A34A',
+    greenBg: 'FFDCFCE7',
+    blue: 'FF1D4ED8',
+    blueBg: 'FFEFF6FF',
+    purple: 'FF6D28D9',
+    purpleBg: 'FFEDE9FE',
+    pink: 'FFEC4899',
+    pinkBg: 'FFFCE7F3',
+    gray: 'FF6B7280',
+    grayBg: 'FFF3F4F6',
+    white: 'FFFFFFFF',
+    black: 'FF111827'
+  };
+
+  const tierColors = {
+    'Training': {bg: COLOR.redBg, text: COLOR.red},
+    'Tier 3':   {bg: COLOR.greenBg, text: COLOR.green},
+    'Tier 2':   {bg: COLOR.amberBg, text: COLOR.amber},
+    'Tier 1':   {bg: COLOR.pinkBg, text: COLOR.pink},
+    'Custom':   {bg: COLOR.purpleBg, text: COLOR.purple},
+    'Resign':   {bg: COLOR.grayBg, text: COLOR.gray}
+  };
+
+  const border = {
+    top:    {style:'thin', color:{argb:'FFE5E7EB'}},
+    left:   {style:'thin', color:{argb:'FFE5E7EB'}},
+    bottom: {style:'thin', color:{argb:'FFE5E7EB'}},
+    right:  {style:'thin', color:{argb:'FFE5E7EB'}}
+  };
+
+  // ===== ROW 1: Title =====
+  ws.mergeCells('A1:P1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `REKAP GAJI · ${bulanNama.toUpperCase()} ${tahun} · MOMOYO ICE CREAM & AI-CHA`;
+  titleCell.font = {bold:true, size:14, color:{argb:COLOR.white}};
+  titleCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+  titleCell.alignment = {horizontal:'center', vertical:'middle'};
+  ws.getRow(1).height = 30;
+
+  // ===== ROW 2: blank =====
+  ws.getRow(2).height = 8;
+
+  // ===== ROW 3: Tanggal Gajian =====
+  ws.getCell('A3').value = 'Tanggal Gajian:';
+  ws.getCell('A3').font = {bold:true};
+  ws.mergeCells('D3:F3');
+  const tglCell = ws.getCell('D3');
+  tglCell.value = tglGajianStr;
+  tglCell.font = {bold:true, size:12, color:{argb:COLOR.red}};
+  tglCell.alignment = {horizontal:'center'};
+  tglCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFFF7ED'}};
+
+  // ===== ROW 4: Keterangan Tier =====
+  ws.getCell('A4').value = 'KETERANGAN TIER:';
+  ws.getCell('A4').font = {bold:true};
+  const tierRefCells = [
+    {addr:'B4', text:'Training (<14 hari)', tier:'Training'},
+    {addr:'C4', text:'Tier 3 (<1th1bln) · Rp 60.000', tier:'Tier 3'},
+    {addr:'D4', text:'Tier 2 (≥1th1bln) · Rp 67.500', tier:'Tier 2'},
+    {addr:'E4', text:'Tier 1 (≥2th7bln) · Rp 75.000', tier:'Tier 1'}
+  ];
+  ws.mergeCells('B4:C4'); // Training wider
+  ws.getCell('B4').value = 'Training (<14 hari) · Rp 45.000';
+  ws.getCell('B4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
+  ws.getCell('B4').font = {bold:true, color:{argb:COLOR.red}};
+  ws.getCell('B4').alignment = {horizontal:'center'};
+
+  ws.mergeCells('D4:E4');
+  ws.getCell('D4').value = 'Tier 3 (<1th1bln) · Rp 60.000';
+  ws.getCell('D4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.greenBg}};
+  ws.getCell('D4').font = {bold:true, color:{argb:COLOR.green}};
+  ws.getCell('D4').alignment = {horizontal:'center'};
+
+  ws.mergeCells('F4:G4');
+  ws.getCell('F4').value = 'Tier 2 (≥1th1bln) · Rp 67.500';
+  ws.getCell('F4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.amberBg}};
+  ws.getCell('F4').font = {bold:true, color:{argb:COLOR.amber}};
+  ws.getCell('F4').alignment = {horizontal:'center'};
+
+  ws.mergeCells('H4:I4');
+  ws.getCell('H4').value = 'Tier 1 (≥2th7bln) · Rp 75.000';
+  ws.getCell('H4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.pinkBg}};
+  ws.getCell('H4').font = {bold:true, color:{argb:COLOR.pink}};
+  ws.getCell('H4').alignment = {horizontal:'center'};
+
+  ws.mergeCells('J4:K4');
+  ws.getCell('J4').value = 'Lembur · Rp 15.000/jam';
+  ws.getCell('J4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blueBg}};
+  ws.getCell('J4').font = {bold:true, color:{argb:COLOR.blue}};
+  ws.getCell('J4').alignment = {horizontal:'center'};
+
+  // ===== ROW 5: blank =====
+  ws.getRow(5).height = 8;
+
+  // ===== ROW 6: Header =====
+  const headers = ['NO','OUTLET','NAMA','NOREK','ATAS NAMA','TGL MASUK','MASA KERJA','TIER','GAJI/HARI','TERHITUNG','JUMLAH','LEMBUR JAM','JML LEMBUR','INSENTIF','BONUS','TOTAL'];
+  headers.forEach((h, i) => {
+    const cell = ws.getCell(6, i+1);
+    cell.value = h;
+    cell.font = {bold:true, color:{argb:COLOR.white}, size:11};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+    cell.alignment = {horizontal:'center', vertical:'middle', wrapText:true};
+    cell.border = border;
+  });
+  ws.getRow(6).height = 35;
+
+  // ===== DATA ROWS =====
+  let currentRow = 7;
   const outletOrder = OUTLETS.map(o => o.nama);
-  let grandTerhitung = 0, grandJumlah = 0, grandLemburJam = 0, grandLemburRp = 0, grandInsentif = 0, grandBonus = 0, grandTotal = 0;
-  let outletIdx = 0;
+  let grandTerhitung = 0, grandJumlah = 0, grandLemburJam = 0, grandLemburRp = 0;
+  let grandInsentif = 0, grandBonus = 0, grandTotal = 0;
+  let outletNum = 0;
   const outletSummaryRows = [];
 
   outletOrder.forEach(outlet => {
     if(!perOutletCrew[outlet]) return;
-    outletIdx++;
-    rows.push([]);
-    rows.push([`${outletIdx}. ${outlet.toUpperCase()}`]);
-    let oTerhitung = 0, oJumlah = 0, oLemburJam = 0, oLemburRp = 0, oInsentif = 0, oBonus = 0, oTotal = 0;
+    outletNum++;
+
+    // OUTLET HEADER ROW
+    ws.mergeCells(currentRow, 1, currentRow, 16);
+    const outletCell = ws.getCell(currentRow, 1);
+    outletCell.value = `${outletNum}. ${outlet.toUpperCase()}`;
+    outletCell.font = {bold:true, color:{argb:COLOR.white}, size:11};
+    outletCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+    outletCell.alignment = {horizontal:'left', vertical:'middle', indent:1};
+    ws.getRow(currentRow).height = 22;
+    currentRow++;
+
+    let oTerhitung=0, oJumlah=0, oLemburJam=0, oLemburRp=0, oInsentif=0, oBonus=0, oTotal=0;
 
     const namaList = Object.keys(perOutletCrew[outlet]).sort();
     let no = 1;
@@ -1619,8 +1740,8 @@ function doExportSlip(){
       const g = hitungInfoGaji(c, s, ins);
 
       const masa = c?.tanggal_masuk ? formatMasaKerja(c.tanggal_masuk) : '-';
-      const outletShort = outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ');
-      rows.push([
+      const outletShort = outlet.replace('Momoyo ','').replace('AI-CHA ','');
+      const rowData = [
         no++, outletShort, nama,
         c?.norek || '-',
         c?.atas_nama || '-',
@@ -1631,53 +1752,171 @@ function doExportSlip(){
         s.lemburJam, g.lemburRp,
         g.insentif, g.bonus,
         g.total
-      ]);
+      ];
+
+      rowData.forEach((val, i) => {
+        const cell = ws.getCell(currentRow, i+1);
+        cell.value = val;
+        cell.border = border;
+        // alignment
+        if(i === 0) cell.alignment = {horizontal:'center'};
+        else if([8,9,10,11,12,13,14,15].includes(i)) cell.alignment = {horizontal:'right'};
+        else cell.alignment = {horizontal:'left'};
+        // format angka
+        if([8,10,12,13,14,15].includes(i)){
+          cell.numFmt = '#,##0;-#,##0;0';
+        }
+      });
+
+      // Tier color
+      const tierCell = ws.getCell(currentRow, 8);
+      const tc = tierColors[g.tier] || tierColors['Tier 3'];
+      tierCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:tc.bg}};
+      tierCell.font = {bold:true, color:{argb:tc.text}};
+      tierCell.alignment = {horizontal:'center'};
+
+      // Total column bold + colored
+      const totalCell = ws.getCell(currentRow, 16);
+      totalCell.font = {bold:true, color:{argb:COLOR.red}};
+      totalCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
+
       oTerhitung += g.terhitung; oJumlah += g.jumlah;
       oLemburJam += s.lemburJam; oLemburRp += g.lemburRp;
       oInsentif += g.insentif; oBonus += g.bonus; oTotal += g.total;
+
+      currentRow++;
     });
-    // Subtotal per outlet
-    rows.push(['','', `TOTAL ${outlet.toUpperCase()}`,'','','','','','', oTerhitung, oJumlah, oLemburJam, oLemburRp, oInsentif, oBonus, oTotal]);
+
+    // SUBTOTAL ROW
+    const subRow = [
+      '','', `TOTAL ${outlet.toUpperCase()}`,'','','','','','',
+      oTerhitung, oJumlah, oLemburJam, oLemburRp, oInsentif, oBonus, oTotal
+    ];
+    subRow.forEach((val, i) => {
+      const cell = ws.getCell(currentRow, i+1);
+      cell.value = val;
+      cell.font = {bold:true, color:{argb:COLOR.white}};
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+      cell.border = border;
+      if([9,10,11,12,13,14,15].includes(i)){
+        cell.alignment = {horizontal:'right'};
+        cell.numFmt = '#,##0;-#,##0;0';
+      }
+      if(i === 2) cell.alignment = {horizontal:'left', indent:1};
+    });
+    currentRow++;
+    currentRow++; // blank separator
 
     grandTerhitung += oTerhitung; grandJumlah += oJumlah;
     grandLemburJam += oLemburJam; grandLemburRp += oLemburRp;
     grandInsentif += oInsentif; grandBonus += oBonus; grandTotal += oTotal;
 
-    outletSummaryRows.push({outlet, total: oTotal, crew: namaList.length});
+    outletSummaryRows.push({outlet, crew: namaList.length, total: oTotal});
   });
 
-  // Grand total
-  rows.push([]);
-  rows.push(['','','GRAND TOTAL SEMUA OUTLET','','','','','','', grandTerhitung, grandJumlah, grandLemburJam, grandLemburRp, grandInsentif, grandBonus, grandTotal]);
-
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:4},{wch:12},{wch:26},{wch:18},{wch:25},{wch:12},{wch:14},{wch:10},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:10},{wch:10},{wch:12}];
-
-  // Merge title row across columns
-  ws['!merges'] = ws['!merges'] || [];
-  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:15}});
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Rekap Gaji');
-
-  // Sheet 2: Ringkasan per outlet
-  const sumRows = [
-    ['RINGKASAN GAJI PER OUTLET · '+bulanNama+' '+tahun],
-    [],
-    ['No','Outlet','Jumlah Crew','Total Gaji (Rp)']
+  // GRAND TOTAL
+  const grandRow = [
+    '','','GRAND TOTAL SEMUA OUTLET','','','','','','',
+    grandTerhitung, grandJumlah, grandLemburJam, grandLemburRp, grandInsentif, grandBonus, grandTotal
   ];
-  outletSummaryRows.forEach((s,i) => sumRows.push([i+1, s.outlet, s.crew, s.total]));
-  sumRows.push([]);
-  sumRows.push(['', 'GRAND TOTAL', outletSummaryRows.reduce((t,s)=>t+s.crew,0), grandTotal]);
-  const ws2 = XLSX.utils.aoa_to_sheet(sumRows);
-  ws2['!cols'] = [{wch:4},{wch:28},{wch:14},{wch:18}];
-  ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}}];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+  grandRow.forEach((val, i) => {
+    const cell = ws.getCell(currentRow, i+1);
+    cell.value = val;
+    cell.font = {bold:true, color:{argb:COLOR.white}, size:12};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+    cell.border = border;
+    if([9,10,11,12,13,14,15].includes(i)){
+      cell.alignment = {horizontal:'right'};
+      cell.numFmt = '#,##0;-#,##0;0';
+    }
+    if(i === 2) cell.alignment = {horizontal:'left', indent:1};
+  });
+  ws.getRow(currentRow).height = 26;
 
+  // Column widths
+  ws.columns = [
+    {width:4},   // NO
+    {width:14},  // Outlet
+    {width:28},  // Nama
+    {width:17},  // Norek
+    {width:26},  // Atas Nama
+    {width:12},  // Tgl Masuk
+    {width:14},  // Masa Kerja
+    {width:11},  // Tier
+    {width:11},  // Gaji/Hari
+    {width:11},  // Terhitung
+    {width:13},  // Jumlah
+    {width:10},  // Lembur Jam
+    {width:13},  // Jml Lembur
+    {width:11},  // Insentif
+    {width:11},  // Bonus
+    {width:14}   // Total
+  ];
+
+  // ===== SHEET 2: SUMMARY PER OUTLET =====
+  const ws2 = wb.addWorksheet('Summary');
+  ws2.mergeCells('A1:D1');
+  const t2 = ws2.getCell('A1');
+  t2.value = `RINGKASAN GAJI PER OUTLET · ${bulanNama.toUpperCase()} ${tahun}`;
+  t2.font = {bold:true, size:14, color:{argb:COLOR.white}};
+  t2.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+  t2.alignment = {horizontal:'center', vertical:'middle'};
+  ws2.getRow(1).height = 26;
+
+  const sh = ['No','Outlet','Jumlah Crew','Total Gaji (Rp)'];
+  sh.forEach((h, i) => {
+    const cell = ws2.getCell(3, i+1);
+    cell.value = h;
+    cell.font = {bold:true, color:{argb:COLOR.white}};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.blue}};
+    cell.alignment = {horizontal:'center', vertical:'middle'};
+    cell.border = border;
+  });
+
+  let r2 = 4;
+  outletSummaryRows.forEach((s, i) => {
+    ws2.getCell(r2,1).value = i+1;
+    ws2.getCell(r2,2).value = s.outlet;
+    ws2.getCell(r2,3).value = s.crew;
+    ws2.getCell(r2,4).value = s.total;
+    ws2.getCell(r2,1).alignment = {horizontal:'center'};
+    ws2.getCell(r2,3).alignment = {horizontal:'center'};
+    ws2.getCell(r2,4).alignment = {horizontal:'right'};
+    ws2.getCell(r2,4).numFmt = '#,##0';
+    ws2.getCell(r2,4).font = {bold:true, color:{argb:COLOR.red}};
+    for(let c=1; c<=4; c++) ws2.getCell(r2,c).border = border;
+    r2++;
+  });
+
+  // Grand total row
+  ws2.getCell(r2,2).value = 'GRAND TOTAL';
+  ws2.getCell(r2,3).value = outletSummaryRows.reduce((t,s)=>t+s.crew,0);
+  ws2.getCell(r2,4).value = grandTotal;
+  ws2.getCell(r2,4).numFmt = '#,##0';
+  for(let c=1; c<=4; c++){
+    const cell = ws2.getCell(r2,c);
+    cell.font = {bold:true, color:{argb:COLOR.white}, size:12};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.red}};
+    cell.border = border;
+  }
+  ws2.getCell(r2,2).alignment = {horizontal:'left', indent:1};
+  ws2.getCell(r2,3).alignment = {horizontal:'center'};
+  ws2.getCell(r2,4).alignment = {horizontal:'right'};
+
+  ws2.columns = [{width:5},{width:28},{width:14},{width:18}];
+
+  // Download
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
   const fname = outletFilter
     ? `SlipGaji_${outletFilter.replace(/ /g,'_')}_${bulanShort}_${tahun}.xlsx`
     : `SlipGaji_Semua_${bulanShort}_${tahun}.xlsx`;
-  XLSX.writeFile(wb, fname);
+  link.download = fname;
+  link.click();
+  URL.revokeObjectURL(url);
   showToast('✅ Slip Gaji ter-download');
 }
 
