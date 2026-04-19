@@ -137,6 +137,24 @@ body{min-height:100vh}
 .riwayat-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
 .riwayat-item:last-child{border-bottom:none}
 .foto-preview-ov{position:absolute;bottom:0;left:0;right:0;padding:6px;background:rgba(0,0,0,.6);color:white;font-size:11px;text-align:center}
+
+/* REKAP CARDS (modern version) */
+.rekap-outlet-header{background:linear-gradient(135deg,var(--brand) 0%,var(--brand-dark) 100%);color:white;padding:10px 14px;border-radius:10px;margin-bottom:10px;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.rekap-outlet-header .total-badge{background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:20px;font-size:11px}
+.crew-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.crew-card:hover{border-color:var(--brand);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.crew-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.crew-card-nama{font-weight:700;font-size:13px;color:var(--text)}
+.crew-card-pct{font-weight:700;font-size:13px}
+.crew-progress-wrap{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-bottom:6px}
+.crew-progress-fill{height:100%;border-radius:3px;transition:width .3s}
+.crew-icons{display:flex;gap:10px;font-size:11px;color:var(--text2);flex-wrap:wrap}
+.crew-ico-item{display:inline-flex;align-items:center;gap:2px}
+.crew-ico-item.alpha{color:var(--red);font-weight:700}
+.crew-ico-item.lembur{color:var(--amber)}
+.rekap-outlet-summary{display:flex;justify-content:space-around;background:var(--surface2);padding:8px;border-radius:8px;margin-bottom:10px;font-size:11px}
+.rekap-outlet-summary > div{text-align:center}
+.rekap-outlet-summary b{display:block;font-size:16px;color:var(--text);font-weight:700}
 </style>
 </head>
 <body>
@@ -359,15 +377,19 @@ body{min-height:100vh}
   <!-- TAB: REKAP -->
   <div class="scroll" id="owner-tab-rekap" style="display:none">
     <div class="card">
-      <div class="card-lbl">📅 Rekap Bulanan</div>
+      <div class="card-lbl">📊 Filter Rekap</div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <select class="input" id="rekap-bulan" style="flex:1;margin-bottom:0"></select>
         <select class="input" id="rekap-tahun" style="width:90px;margin-bottom:0"></select>
       </div>
-      <select class="input" id="rekap-outlet" style="margin-bottom:0">
+      <select class="input" id="rekap-outlet" style="margin-bottom:10px">
         <option value="">Semua outlet</option>
       </select>
-      <button class="btn btn-brand" onclick="loadRekap()" style="margin-top:10px">🔍 Tampilkan</button>
+      <button class="btn btn-brand" onclick="loadRekap()" style="margin-bottom:8px">🔍 Tampilkan Rekap</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline" style="flex:1;font-size:12px;padding:10px" onclick="exportRekapExcel()">📊 Export Rekap</button>
+        <button class="btn" style="flex:1;font-size:12px;padding:10px;background:var(--green);color:white" onclick="exportSlipGaji()">💰 Export Slip Gaji</button>
+      </div>
     </div>
     <div id="rekap-result"></div>
   </div>
@@ -1180,25 +1202,46 @@ async function loadRekap(){
   const result = document.getElementById('rekap-result');
   result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
 
-  // Get absensi
-  let query = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=5000';
-  if(outletFilter) query = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+query;
+  // 1) Fetch absensi bulan ini
+  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=10000';
+  if(outletFilter) qAbsen = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qAbsen;
   let absensi = [];
-  try { absensi = await sbGet('absensi', query); } catch(e){}
+  try { absensi = await sbGet('absensi', qAbsen); } catch(e){ console.error(e); }
+
+  // 2) Fetch semua crew (untuk data tier, norek, dll)
+  let crews = [];
+  try {
+    let qCrew = 'order=outlet_nama,nama';
+    if(outletFilter) qCrew = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qCrew;
+    crews = await sbGet('crew', qCrew);
+  } catch(e){ console.error(e); }
+
+  // 3) Fetch insentif/bonus bulan ini
+  let insentifList = [];
+  try {
+    let qIns = 'bulan=eq.'+bulan+'&tahun=eq.'+tahun;
+    if(outletFilter) qIns = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qIns;
+    insentifList = await sbGet('insentif_bonus', qIns);
+  } catch(e){}
+  const insMap = {};
+  (insentifList||[]).forEach(i => { insMap[i.outlet_nama+'|'+i.nama] = i; });
+
+  // Simpan global untuk export
+  window._rekapAbsensi = absensi || [];
+  window._rekapCrews = crews || [];
+  window._rekapInsMap = insMap;
+  window._rekapBulan = bulan;
+  window._rekapTahun = tahun;
+  window._rekapOutletFilter = outletFilter;
 
   if(!absensi || absensi.length === 0){
-    result.innerHTML = '<div class="card"><div class="empty-state">Belum ada data absensi bulan ini</div></div>';
+    result.innerHTML = '<div class="card"><div class="empty-state">Belum ada data absensi untuk periode ini</div></div>';
     return;
   }
 
-  // Simpan untuk detail + export
-  window._rekapAbsensi = absensi;
-  window._rekapBulan = bulan;
-  window._rekapTahun = tahun;
-
-  // Group per outlet → crew → detail
+  // Group absensi per outlet → crew
   const perOutletCrew = {};
-  const detailMap = {}; // key: outlet|nama → list absensi
+  const detailMap = {};
   absensi.forEach(a => {
     const outKey = a.outlet_nama;
     if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
@@ -1216,54 +1259,95 @@ async function loadRekap(){
   });
   window._rekapDetail = detailMap;
 
-  // Render
+  // Render per outlet
   const bulanNama = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][bulan];
-  let html = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:700">📅 ${bulanNama} ${tahun}${outletFilter?' · '+outletFilter:' · Semua outlet'}</div>
-    <button class="mini-btn" style="background:var(--green);color:white;padding:6px 12px" onclick="exportRekapExcel()">📥 Export Excel</button>
-  </div>`;
+  let html = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center">📅 <b>${bulanNama} ${tahun}</b>${outletFilter?' · '+outletFilter:' · Semua outlet'}</div>`;
 
-  for(const outlet of Object.keys(perOutletCrew).sort()){
+  // Urutan outlet sesuai OUTLETS global (yang sudah sorted by id)
+  const outletOrder = OUTLETS.map(o => o.nama);
+  const outletsInData = outletOrder.filter(o => perOutletCrew[o]);
+
+  outletsInData.forEach(outlet => {
     const crewMap = perOutletCrew[outlet];
     const namaList = Object.keys(crewMap).sort();
-    html += `<div class="card">
-      <div class="card-lbl">🏪 ${outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ')}</div>
-      <div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
-        <thead><tr style="background:var(--surface2)">
-          <th style="text-align:left;padding:6px">Nama</th>
-          <th style="padding:6px">M</th>
-          <th style="padding:6px">L</th>
-          <th style="padding:6px">C</th>
-          <th style="padding:6px">A</th>
-          <th style="padding:6px">Lbr</th>
-          <th style="padding:6px;color:var(--green)">Trh</th>
-          <th style="padding:6px">·</th>
-        </tr></thead>
-        <tbody>`;
+
+    // Summary outlet
+    let totalMasuk = 0, totalLibur = 0, totalAlpha = 0, totalLemburJam = 0;
+    namaList.forEach(n => {
+      totalMasuk += crewMap[n].masuk;
+      totalLibur += crewMap[n].libur;
+      totalAlpha += crewMap[n].alpha;
+      totalLemburJam += crewMap[n].lemburJam;
+    });
+
+    html += `<div style="margin-bottom:16px">
+      <div class="rekap-outlet-header">
+        <span>🏪 ${outlet.replace('Momoyo ','').replace('AI-CHA ','AI-CHA ')}</span>
+        <span class="total-badge">${namaList.length} crew</span>
+      </div>
+      <div class="rekap-outlet-summary">
+        <div><b style="color:var(--green)">${totalMasuk}</b>Hari Masuk</div>
+        <div><b style="color:var(--purple)">${totalLibur}</b>Libur</div>
+        <div><b style="color:var(--red)">${totalAlpha}</b>Alpha</div>
+        <div><b style="color:var(--amber)">${totalLemburJam}j</b>Lembur</div>
+      </div>`;
+
     namaList.forEach(nama => {
       const s = crewMap[nama];
-      const total = s.masuk+s.libur+s.cuti+s.alpha;
-      const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
-      const col = s.alpha>0 ? 'var(--red)' : 'var(--green)';
+      const total = s.masuk + s.libur + s.cuti + s.alpha;
+      const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
+      const pct = total > 0 ? Math.round((s.masuk / total) * 100) : 0;
+
+      // Progress bar warna
+      let fillColor, pctColor;
+      if(s.alpha > 0){ fillColor = 'var(--red)'; pctColor = 'var(--red)'; }
+      else if(pct >= 90){ fillColor = 'var(--green)'; pctColor = 'var(--green)'; }
+      else if(pct >= 70){ fillColor = 'var(--amber)'; pctColor = 'var(--amber)'; }
+      else { fillColor = 'var(--red)'; pctColor = 'var(--red)'; }
+
       const detailKey = outlet+'|'+nama;
-      html += `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:6px">${nama}</td>
-        <td style="text-align:center;padding:6px">${s.masuk}</td>
-        <td style="text-align:center;padding:6px">${s.libur}</td>
-        <td style="text-align:center;padding:6px">${s.cuti}</td>
-        <td style="text-align:center;padding:6px;color:${s.alpha>0?'var(--red)':'inherit'}">${s.alpha}</td>
-        <td style="text-align:center;padding:6px">${s.lemburHari}(${s.lemburJam}j)</td>
-        <td style="text-align:center;padding:6px;color:${col};font-weight:700">${terhitung}/${total}</td>
-        <td style="text-align:center;padding:6px">
-          <button class="mini-btn" style="background:var(--blue-bg);color:var(--blue);padding:3px 8px;font-size:10px" onclick="showDetailCrew('${detailKey.replace(/'/g,"\\'")}')">🔍</button>
-        </td>
-      </tr>`;
+
+      // Icons summary
+      const icons = [];
+      if(s.masuk > 0) icons.push(`<span class="crew-ico-item">✓ Masuk: <b>${s.masuk}</b></span>`);
+      if(s.libur > 0) icons.push(`<span class="crew-ico-item">📅 Libur: <b>${s.libur}</b></span>`);
+      if(s.cuti > 0) icons.push(`<span class="crew-ico-item">🏖️ Cuti: <b>${s.cuti}</b></span>`);
+      if(s.alpha > 0) icons.push(`<span class="crew-ico-item alpha">⚠️ Alpha: <b>${s.alpha}</b></span>`);
+      if(s.lemburJam > 0) icons.push(`<span class="crew-ico-item lembur">⏰ Lembur: <b>${s.lemburJam}j</b></span>`);
+
+      html += `<div class="crew-card" onclick="showDetailCrew('${detailKey.replace(/'/g,"\\'")}')">
+        <div class="crew-card-head">
+          <span class="crew-card-nama">${nama}</span>
+          <span class="crew-card-pct" style="color:${pctColor}">${pct}%</span>
+        </div>
+        <div class="crew-progress-wrap">
+          <div class="crew-progress-fill" style="width:${pct}%;background:${fillColor}"></div>
+        </div>
+        <div class="crew-icons">${icons.join('')}</div>
+      </div>`;
     });
-    html += '</tbody></table></div>';
-    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px">M=Masuk, L=Libur, C=Cuti, A=Alpha, Lbr=Lembur (hari + jam), Trh=Terhitung · 🔍 = lihat detail harian + foto</div>';
+
     html += '</div>';
-  }
+  });
+
   result.innerHTML = html;
+}
+
+// Hitung info gaji per crew (untuk slip gaji)
+function hitungInfoGaji(crewRec, stats, insRec){
+  const tier = hitungTier(crewRec?.tanggal_masuk, crewRec?.tanggal_keluar, crewRec?.gaji_custom);
+  const terhitung = stats.alpha > 0 ? stats.masuk + stats.cuti : stats.masuk + stats.libur + stats.cuti;
+  const jumlah = tier.gaji * terhitung;
+  const lemburRp = stats.lemburJam * 15000;
+  const insentif = insRec ? (insRec.insentif || 0) : 0;
+  const bonus = insRec ? (insRec.bonus || 0) : 0;
+  const total = jumlah + lemburRp + insentif + bonus;
+  return {
+    tier: tier.tier,
+    gajiPerHari: tier.gaji,
+    terhitung, jumlah, lemburRp,
+    insentif, bonus, total
+  };
 }
 
 // Modal detail crew: absensi harian + foto
@@ -1300,56 +1384,194 @@ function showDetailCrew(key){
   modal.classList.add('show');
 }
 
-// Export rekap ke Excel .xlsx (pakai SheetJS, auto-split kolom)
+// ============================================================
+// EXPORT REKAP (rekap bulanan lengkap per crew)
+// ============================================================
 function exportRekapExcel(){
   const absensi = window._rekapAbsensi || [];
-  const bulan = window._rekapBulan;
-  const tahun = window._rekapTahun;
-  if(absensi.length === 0){ showToast('Belum ada data'); return; }
-
-  // Load SheetJS library on-demand
+  if(absensi.length === 0){ showToast('❌ Tampilkan rekap dulu'); return; }
   if(typeof XLSX === 'undefined'){
     showToast('⏳ Loading library...');
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    script.onload = () => doExportExcel();
-    script.onerror = () => showToast('❌ Gagal load library, cek internet');
+    script.onload = () => doExportRekap();
+    script.onerror = () => showToast('❌ Gagal load library');
     document.head.appendChild(script);
   } else {
-    doExportExcel();
+    doExportRekap();
   }
 }
 
-function doExportExcel(){
-  const absensi = window._rekapAbsensi || [];
+function doExportRekap(){
+  const absensi = window._rekapAbsensi;
+  const crews = window._rekapCrews || [];
+  const insMap = window._rekapInsMap || {};
   const bulan = window._rekapBulan;
   const tahun = window._rekapTahun;
+  const outletFilter = window._rekapOutletFilter;
+  const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
 
-  // Sheet 1: Detail absensi harian
-  const detailData = [
-    ['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur (jam)','Jarak GPS (m)','Foto URL']
-  ];
+  // Group absensi
+  const perOutletCrew = {};
+  const detailMap = {};
   absensi.forEach(a => {
-    detailData.push([
-      a.outlet_nama||'',
-      a.nama||'',
-      a.tanggal||'',
-      a.shift||'',
-      a.clock_in||'',
-      a.clock_out||'',
-      a.status||'',
-      a.lembur_jam||0,
-      a.jarak||'',
+    const k = a.outlet_nama;
+    if(!perOutletCrew[k]) perOutletCrew[k] = {};
+    if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = perOutletCrew[k][a.nama];
+    if(a.status==='masuk') s.masuk++;
+    else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
+    else if(a.status==='libur') s.libur++;
+    else if(a.status==='cuti') s.cuti++;
+    else if(a.status==='alpha') s.alpha++;
+
+    const dk = a.outlet_nama+'|'+a.nama;
+    if(!detailMap[dk]) detailMap[dk] = {};
+    detailMap[dk][a.tanggal] = a;
+  });
+
+  const crewLookup = {};
+  crews.forEach(c => { crewLookup[c.outlet_nama+'|'+c.nama] = c; });
+
+  const wb = XLSX.utils.book_new();
+
+  // =========================================================
+  // SHEET 1: RINGKASAN (semua crew, per outlet, dengan tier+persen)
+  // =========================================================
+  const sumRows = [['No','Outlet','Nama','Nama Panggilan','Tgl Masuk','Tier','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Total Tercatat','Terhitung','% Kehadiran']];
+  let idx = 1;
+  const outletOrder = OUTLETS.map(o => o.nama);
+  outletOrder.forEach(outlet => {
+    if(!perOutletCrew[outlet]) return;
+    const namaList = Object.keys(perOutletCrew[outlet]).sort();
+    namaList.forEach(nama => {
+      const s = perOutletCrew[outlet][nama];
+      const c = crewLookup[outlet+'|'+nama];
+      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom);
+      const total = s.masuk + s.libur + s.cuti + s.alpha;
+      const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
+      const pct = total > 0 ? Math.round((s.masuk / total) * 100) : 0;
+      sumRows.push([
+        idx++, outlet, nama,
+        c?.nama_panggilan || '',
+        c?.tanggal_masuk || '',
+        tier.tier,
+        s.masuk, s.libur, s.cuti, s.alpha,
+        s.lemburHari, s.lemburJam,
+        total, terhitung,
+        pct + '%'
+      ]);
+    });
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(sumRows);
+  ws1['!cols'] = [{wch:4},{wch:22},{wch:26},{wch:15},{wch:12},{wch:10},{wch:7},{wch:7},{wch:7},{wch:7},{wch:13},{wch:13},{wch:14},{wch:11},{wch:13}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
+
+  // =========================================================
+  // SHEET 2: KALENDER (per crew × tanggal × status)
+  // =========================================================
+  const daysInMonth = new Date(tahun, bulan, 0).getDate();
+  const hariNama = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  const calHeader = ['Outlet','Nama','Tier'];
+  for(let d=1; d<=daysInMonth; d++){
+    const dt = new Date(tahun, bulan-1, d);
+    calHeader.push(`${d} ${hariNama[dt.getDay()]}`);
+  }
+  calHeader.push('Masuk','Libur','Cuti','Alpha','Lbr Jam','Terhitung');
+  const calRows = [calHeader];
+
+  outletOrder.forEach(outlet => {
+    if(!perOutletCrew[outlet]) return;
+    const namaList = Object.keys(perOutletCrew[outlet]).sort();
+    namaList.forEach(nama => {
+      const s = perOutletCrew[outlet][nama];
+      const c = crewLookup[outlet+'|'+nama];
+      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom);
+      const row = [outlet, nama, tier.tier];
+      for(let d=1; d<=daysInMonth; d++){
+        const dd = String(d).padStart(2,'0');
+        const mm = String(bulan).padStart(2,'0');
+        const tglKey = `${dd}/${mm}/${tahun}`;
+        const abs = (detailMap[outlet+'|'+nama] || {})[tglKey];
+        if(!abs){ row.push(''); continue; }
+        if(abs.status === 'masuk') row.push('✓');
+        else if(abs.status === 'lembur') row.push('⏰'+(abs.lembur_jam||''));
+        else if(abs.status === 'libur') row.push('L');
+        else if(abs.status === 'cuti') row.push('C');
+        else if(abs.status === 'alpha') row.push('✕');
+        else row.push('?');
+      }
+      const total = s.masuk + s.libur + s.cuti + s.alpha;
+      const terhitung = s.alpha > 0 ? s.masuk + s.cuti : s.masuk + s.libur + s.cuti;
+      row.push(s.masuk, s.libur, s.cuti, s.alpha, s.lemburJam, `${terhitung}/${total}`);
+      calRows.push(row);
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(calRows);
+  const calCols = [{wch:20},{wch:25},{wch:10}];
+  for(let d=1; d<=daysInMonth; d++) calCols.push({wch:7});
+  calCols.push({wch:8},{wch:7},{wch:7},{wch:7},{wch:8},{wch:10});
+  ws2['!cols'] = calCols;
+  XLSX.utils.book_append_sheet(wb, ws2, 'Kalender');
+
+  // =========================================================
+  // SHEET 3: DETAIL HARIAN (raw data)
+  // =========================================================
+  const detailRows = [['Outlet','Nama','Tanggal','Shift','Clock In','Clock Out','Status','Lembur Jam','Jarak GPS','Foto URL']];
+  absensi.forEach(a => {
+    detailRows.push([
+      a.outlet_nama||'', a.nama||'', a.tanggal||'',
+      a.shift||'', a.clock_in||'', a.clock_out||'',
+      a.status||'', a.lembur_jam||0, a.jarak||'',
       a.foto_url||''
     ]);
   });
+  const ws3 = XLSX.utils.aoa_to_sheet(detailRows);
+  ws3['!cols'] = [{wch:22},{wch:26},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:11},{wch:11},{wch:50}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Detail Harian');
 
-  // Sheet 2: Ringkasan per crew
-  const perCrew = {};
+  const fname = outletFilter
+    ? `Rekap_${outletFilter.replace(/ /g,'_')}_${bulanNama}_${tahun}.xlsx`
+    : `Rekap_Semua_${bulanNama}_${tahun}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast('✅ Rekap Excel ter-download');
+}
+
+// ============================================================
+// EXPORT SLIP GAJI (hitungan gaji per crew)
+// ============================================================
+function exportSlipGaji(){
+  const absensi = window._rekapAbsensi || [];
+  if(absensi.length === 0){ showToast('❌ Tampilkan rekap dulu'); return; }
+  if(typeof XLSX === 'undefined'){
+    showToast('⏳ Loading library...');
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.onload = () => doExportSlip();
+    script.onerror = () => showToast('❌ Gagal load library');
+    document.head.appendChild(script);
+  } else {
+    doExportSlip();
+  }
+}
+
+function doExportSlip(){
+  const absensi = window._rekapAbsensi;
+  const crews = window._rekapCrews || [];
+  const insMap = window._rekapInsMap || {};
+  const bulan = window._rekapBulan;
+  const tahun = window._rekapTahun;
+  const outletFilter = window._rekapOutletFilter;
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][bulan-1];
+  const bulanShort = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
+
+  // Stats per outlet|nama
+  const perOutletCrew = {};
   absensi.forEach(a => {
-    const k = a.outlet_nama+'|'+a.nama;
-    if(!perCrew[k]) perCrew[k] = {outlet:a.outlet_nama,nama:a.nama,masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
-    const s = perCrew[k];
+    const k = a.outlet_nama;
+    if(!perOutletCrew[k]) perOutletCrew[k] = {};
+    if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = perOutletCrew[k][a.nama];
     if(a.status==='masuk') s.masuk++;
     else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
     else if(a.status==='libur') s.libur++;
@@ -1357,45 +1579,106 @@ function doExportExcel(){
     else if(a.status==='alpha') s.alpha++;
   });
 
-  const summaryData = [
-    ['Outlet','Nama','Masuk','Libur','Cuti','Alpha','Lembur (hari)','Lembur (jam)','Total Tercatat','Terhitung']
-  ];
-  Object.values(perCrew).sort((a,b)=>a.outlet.localeCompare(b.outlet)||a.nama.localeCompare(b.nama)).forEach(s => {
-    const total = s.masuk+s.libur+s.cuti+s.alpha;
-    const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
-    summaryData.push([
-      s.outlet, s.nama,
-      s.masuk, s.libur, s.cuti, s.alpha,
-      s.lemburHari, s.lemburJam,
-      total, terhitung
-    ]);
+  const crewLookup = {};
+  crews.forEach(c => { crewLookup[c.outlet_nama+'|'+c.nama] = c; });
+
+  // Tanggal gajian = akhir bulan
+  const lastDay = new Date(tahun, bulan, 0).getDate();
+  const tglGajianStr = `${lastDay} ${bulanNama} ${tahun}`;
+
+  // Build rows
+  const rows = [];
+  // Title
+  rows.push([`REKAP GAJI · ${bulanNama.toUpperCase()} ${tahun} · MOMOYO ICE CREAM & AI-CHA`]);
+  rows.push([]);
+  rows.push(['Tanggal Gajian:', '', '', tglGajianStr]);
+  rows.push(['KETERANGAN TIER:', 'Training (<14 hari) · Rp 45.000', 'Tier 3 (<1th1bln) · Rp 60.000', 'Tier 2 (≥1th1bln) · Rp 67.500', 'Tier 1 (≥2th7bln) · Rp 75.000', 'Lembur · Rp 15.000/jam']);
+  rows.push([]);
+  // Header
+  const header = ['NO','OUTLET','NAMA','NOREK','ATAS NAMA','TGL MASUK','MASA KERJA','TIER','GAJI/HARI','TERHITUNG','JUMLAH','LEMBUR JAM','JML LEMBUR','INSENTIF','BONUS','TOTAL'];
+  rows.push(header);
+
+  const outletOrder = OUTLETS.map(o => o.nama);
+  let grandTerhitung = 0, grandJumlah = 0, grandLemburJam = 0, grandLemburRp = 0, grandInsentif = 0, grandBonus = 0, grandTotal = 0;
+  let outletIdx = 0;
+  const outletSummaryRows = [];
+
+  outletOrder.forEach(outlet => {
+    if(!perOutletCrew[outlet]) return;
+    outletIdx++;
+    rows.push([]);
+    rows.push([`${outletIdx}. ${outlet.toUpperCase()}`]);
+    let oTerhitung = 0, oJumlah = 0, oLemburJam = 0, oLemburRp = 0, oInsentif = 0, oBonus = 0, oTotal = 0;
+
+    const namaList = Object.keys(perOutletCrew[outlet]).sort();
+    let no = 1;
+    namaList.forEach(nama => {
+      const s = perOutletCrew[outlet][nama];
+      const c = crewLookup[outlet+'|'+nama];
+      const ins = insMap[outlet+'|'+nama];
+      const g = hitungInfoGaji(c, s, ins);
+
+      const masa = c?.tanggal_masuk ? formatMasaKerja(c.tanggal_masuk) : '-';
+      const outletShort = outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ');
+      rows.push([
+        no++, outletShort, nama,
+        c?.norek || '-',
+        c?.atas_nama || '-',
+        c?.tanggal_masuk || '-',
+        masa, g.tier,
+        g.gajiPerHari,
+        g.terhitung, g.jumlah,
+        s.lemburJam, g.lemburRp,
+        g.insentif, g.bonus,
+        g.total
+      ]);
+      oTerhitung += g.terhitung; oJumlah += g.jumlah;
+      oLemburJam += s.lemburJam; oLemburRp += g.lemburRp;
+      oInsentif += g.insentif; oBonus += g.bonus; oTotal += g.total;
+    });
+    // Subtotal per outlet
+    rows.push(['','', `TOTAL ${outlet.toUpperCase()}`,'','','','','','', oTerhitung, oJumlah, oLemburJam, oLemburRp, oInsentif, oBonus, oTotal]);
+
+    grandTerhitung += oTerhitung; grandJumlah += oJumlah;
+    grandLemburJam += oLemburJam; grandLemburRp += oLemburRp;
+    grandInsentif += oInsentif; grandBonus += oBonus; grandTotal += oTotal;
+
+    outletSummaryRows.push({outlet, total: oTotal, crew: namaList.length});
   });
 
-  // Build workbook
+  // Grand total
+  rows.push([]);
+  rows.push(['','','GRAND TOTAL SEMUA OUTLET','','','','','','', grandTerhitung, grandJumlah, grandLemburJam, grandLemburRp, grandInsentif, grandBonus, grandTotal]);
+
   const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-  const ws2 = XLSX.utils.aoa_to_sheet(detailData);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:4},{wch:12},{wch:26},{wch:18},{wch:25},{wch:12},{wch:14},{wch:10},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:10},{wch:10},{wch:12}];
 
-  // Auto-width kolom (biar nggak sempit)
-  const setColWidths = (ws, data) => {
-    const widths = data[0].map((_, colIdx) => {
-      const maxLen = data.reduce((max, row) => {
-        const cell = String(row[colIdx]||'');
-        return Math.max(max, cell.length);
-      }, 0);
-      return { wch: Math.min(Math.max(maxLen+2, 10), 50) };
-    });
-    ws['!cols'] = widths;
-  };
-  setColWidths(ws1, summaryData);
-  setColWidths(ws2, detailData);
+  // Merge title row across columns
+  ws['!merges'] = ws['!merges'] || [];
+  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:15}});
 
-  XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
-  XLSX.utils.book_append_sheet(wb, ws2, 'Detail Harian');
+  XLSX.utils.book_append_sheet(wb, ws, 'Rekap Gaji');
 
-  const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
-  XLSX.writeFile(wb, `Rekap_Absensi_${bulanNama}_${tahun}.xlsx`);
-  showToast('✅ File Excel ter-download');
+  // Sheet 2: Ringkasan per outlet
+  const sumRows = [
+    ['RINGKASAN GAJI PER OUTLET · '+bulanNama+' '+tahun],
+    [],
+    ['No','Outlet','Jumlah Crew','Total Gaji (Rp)']
+  ];
+  outletSummaryRows.forEach((s,i) => sumRows.push([i+1, s.outlet, s.crew, s.total]));
+  sumRows.push([]);
+  sumRows.push(['', 'GRAND TOTAL', outletSummaryRows.reduce((t,s)=>t+s.crew,0), grandTotal]);
+  const ws2 = XLSX.utils.aoa_to_sheet(sumRows);
+  ws2['!cols'] = [{wch:4},{wch:28},{wch:14},{wch:18}];
+  ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  const fname = outletFilter
+    ? `SlipGaji_${outletFilter.replace(/ /g,'_')}_${bulanShort}_${tahun}.xlsx`
+    : `SlipGaji_Semua_${bulanShort}_${tahun}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  showToast('✅ Slip Gaji ter-download');
 }
 
 // ============================================================
