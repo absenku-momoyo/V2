@@ -113,6 +113,22 @@ body{min-height:100vh}
 .btn-green{background:var(--green);color:white}
 .btn-red{background:var(--red);color:white}
 .empty-state{text-align:center;padding:30px 20px;color:var(--text3);font-size:13px}
+
+/* CREW SPECIFIC */
+.shift-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px}
+.btn-green{background:var(--green);color:white}
+.btn-green:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed}
+.btn-red{background:var(--red);color:white}
+.btn-red:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed}
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.badge.masuk{background:var(--green-bg);color:var(--green)}
+.badge.lembur{background:var(--amber-bg);color:var(--amber)}
+.badge.libur{background:var(--purple-bg);color:var(--purple)}
+.badge.cuti{background:var(--blue-bg);color:var(--blue)}
+.badge.alpha{background:var(--red-bg);color:var(--red)}
+.riwayat-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.riwayat-item:last-child{border-bottom:none}
+.foto-preview-ov{position:absolute;bottom:0;left:0;right:0;padding:6px;background:rgba(0,0,0,.6);color:white;font-size:11px;text-align:center}
 </style>
 </head>
 <body>
@@ -169,13 +185,89 @@ body{min-height:100vh}
     </div>
     <button class="logout-btn" onclick="logout()">Keluar</button>
   </div>
-  <div class="scroll">
+
+  <!-- TAB: HOME -->
+  <div class="scroll" id="crew-tab-home">
+    <div class="card" style="text-align:center">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Hari Ini</div>
+      <div id="live-tgl" style="font-size:13px;color:var(--text2);margin-top:4px">-</div>
+      <div id="live-jam" style="font-size:36px;font-weight:800;color:var(--brand);margin-top:4px;line-height:1">-</div>
+      <div id="shift-chip-area" style="margin-top:10px"></div>
+    </div>
+
     <div class="card">
-      <div class="card-lbl">✅ Login berhasil</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.5">
-        Step 1 sukses — koneksi Supabase OK, login jalan.<br><br>
-        Halaman crew home lengkap (clock in/out, shift chip, tombol libur, riwayat) akan ditambahkan di <b>Step 2</b>.
+      <div class="card-lbl">📍 Status Hari Ini</div>
+      <div id="status-today" style="font-size:13px;color:var(--text2);padding:8px 0">Memuat...</div>
+      <button class="btn btn-green" id="btn-ci" onclick="openClock('in')" style="margin-bottom:8px">🟢 Clock In — Saya Datang</button>
+      <button class="btn btn-red" id="btn-co" onclick="openClock('out')" disabled>🔴 Clock Out — Saya Pulang</button>
+      <button class="btn" id="btn-libur" onclick="ambilLibur()" style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple);margin-top:8px;display:none">📅 Ambil Libur Hari Ini</button>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">📋 Riwayat 7 Hari Terakhir</div>
+      <div id="riwayat-list" style="font-size:12px">-</div>
+    </div>
+  </div>
+
+  <!-- TAB: IZIN (placeholder) -->
+  <div class="scroll" id="crew-tab-izin" style="display:none">
+    <div class="soon-box">
+      <div class="icon">📝</div>
+      <div>Ajukan Izin/Cuti akan ditambahkan di Step 3c</div>
+    </div>
+  </div>
+
+  <!-- TAB: PROFIL (placeholder) -->
+  <div class="scroll" id="crew-tab-profil" style="display:none">
+    <div class="soon-box">
+      <div class="icon">👤</div>
+      <div>Profil & rekap akan ditambahkan di Step 3c</div>
+    </div>
+  </div>
+
+  <nav class="tab-nav">
+    <button class="tab-item on" id="cti-home" onclick="crewTab('home')">
+      <span class="tab-ico">🏠</span>Home
+    </button>
+    <button class="tab-item" id="cti-izin" onclick="crewTab('izin')">
+      <span class="tab-ico">📝</span>Izin
+    </button>
+    <button class="tab-item" id="cti-profil" onclick="crewTab('profil')">
+      <span class="tab-ico">👤</span>Profil
+    </button>
+  </nav>
+</div>
+
+<!-- CLOCK IN/OUT MODAL -->
+<div class="modal-overlay" id="modal-clock">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="clock-title">🟢 Clock In</div>
+    <div class="modal-sub" id="clock-sub">-</div>
+
+    <div class="field">
+      <label class="lbl">📸 Foto Selfie</label>
+      <div id="camera-wrap" style="display:none;position:relative;border-radius:var(--rs);overflow:hidden;background:black">
+        <video id="camera-video" autoplay playsinline style="width:100%;max-height:280px;object-fit:cover;display:block"></video>
+        <div style="display:flex;gap:8px;padding:8px;background:#111">
+          <button onclick="captureFoto()" style="flex:2;padding:10px;background:var(--green);color:white;font-weight:700;border:none;border-radius:8px;cursor:pointer">📸 Ambil Foto</button>
+          <button onclick="cancelFoto()" style="flex:1;padding:10px;background:#333;color:white;border:none;border-radius:8px;cursor:pointer">Batal</button>
+        </div>
       </div>
+      <div id="foto-box" style="display:none;position:relative;border-radius:var(--rs);overflow:hidden;cursor:pointer" onclick="bukaKamera()">
+        <!-- preview foto muncul di sini -->
+      </div>
+      <button id="btn-buka-kamera" class="btn btn-outline" onclick="bukaKamera()" style="margin-bottom:0">📷 Buka Kamera</button>
+    </div>
+
+    <div class="field">
+      <label class="lbl">📍 Lokasi GPS</label>
+      <div id="gps-info" class="info-line" style="margin-top:0">Menunggu GPS...</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeClockModal()">Batal</button>
+      <button class="btn btn-brand" id="btn-submit-clock" onclick="submitClock()" disabled>Simpan</button>
     </div>
   </div>
 </div>
@@ -286,6 +378,30 @@ body{min-height:100vh}
     <div class="btn-row">
       <button class="btn btn-outline" onclick="closeModal('modal-tambah')">Batal</button>
       <button class="btn btn-green" id="btn-save-tambah" onclick="saveTambahCrew()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PINDAH OUTLET -->
+<div class="modal-overlay" id="modal-pindah">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔄 Pindah Outlet</div>
+    <div class="modal-sub" id="pindah-info">-</div>
+
+    <div class="field">
+      <label class="lbl">Outlet Tujuan</label>
+      <select class="input" id="p-outlet" style="margin-bottom:0"></select>
+      <div class="info-line" style="margin-top:8px">
+        ℹ️ Mulai hari ini, semua absensi crew akan tercatat di outlet baru.<br>
+        Absensi lama tetap tercatat milik outlet sebelumnya (tidak diubah).<br>
+        Masa kerja tetap dihitung dari tanggal masuk awal.
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeModal('modal-pindah')">Batal</button>
+      <button class="btn btn-green" id="btn-save-pindah" onclick="savePindahOutlet()">💾 Pindahkan</button>
     </div>
   </div>
 </div>
@@ -522,11 +638,548 @@ async function loginCrew(){
     document.getElementById('bar-nama').textContent = crewNama;
     document.getElementById('bar-outlet').textContent = outletNama;
     showScreen('sc-crew-home');
+    crewTab('home');
+    updateLiveJam();
+    renderShiftChip();
+    await loadTodayAbsen();
+    await loadRiwayat();
     showToast('Selamat datang, '+crewNama+' 👋');
   } catch(e){
     showErr('Gagal login: '+e.message);
     btn.disabled = false;
     btn.textContent = 'Masuk';
+  }
+}
+
+// ============================================================
+// OUTLET JAM KERJA CONFIG (source of truth)
+// ============================================================
+const OUTLET_JAM_DEFAULT = {
+  weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
+  weekend: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}}
+};
+const OUTLET_JAM_OVERRIDE = {
+  'Momoyo Kantor Pos': {
+    weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
+    weekend: {pagi:{masuk:'07:00',pulang:'16:00'}, siang:{masuk:'14:00',pulang:'22:00'}}
+  },
+  'Momoyo Alun Alun Batu': {
+    weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
+    weekend: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'15:00',pulang:'23:00'}}
+  }
+};
+const SHIFT_CUTOFF_MENIT = 12*60;
+
+function todayStr(){
+  const n = new Date();
+  const dd = String(n.getDate()).padStart(2,'0');
+  const mm = String(n.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${n.getFullYear()}`;
+}
+function getJam(){
+  const n = new Date();
+  return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+}
+function toMenit(t){
+  if(!t) return 0;
+  const p = t.split(':');
+  return parseInt(p[0])*60+parseInt(p[1]);
+}
+function isWeekend(){
+  const dow = new Date().getDay();
+  return dow===0 || dow===6;
+}
+function getExpectedShift(outletNama, jamClockIn){
+  const jam = jamClockIn || getJam();
+  const isPagi = toMenit(jam) < SHIFT_CUTOFF_MENIT;
+  const shiftKey = isPagi ? 'pagi' : 'siang';
+  const dayKey = isWeekend() ? 'weekend' : 'weekday';
+  const cfg = OUTLET_JAM_OVERRIDE[outletNama] || OUTLET_JAM_DEFAULT;
+  const jamCfg = cfg[dayKey][shiftKey];
+  return {
+    id: shiftKey,
+    label: isPagi ? 'Pagi' : 'Siang',
+    masuk: jamCfg.masuk,
+    pulang: jamCfg.pulang
+  };
+}
+function hitungLemburJam(co, pulang){
+  const c = toMenit(co), p = toMenit(pulang);
+  if(c <= p+60) return 0;
+  return Math.floor((c-p)/60);
+}
+function jarakMeter(la1, ln1, la2, ln2){
+  const R = 6371000;
+  const dL = (la2-la1)*Math.PI/180;
+  const dN = (ln2-ln1)*Math.PI/180;
+  const a = Math.sin(dL/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dN/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ============================================================
+// CREW STATE
+// ============================================================
+let crewTodayAbsen = null;   // row absensi hari ini dari DB
+let clockType = 'in';
+let currentGPS = null;
+let currentGPSAccuracy = null;
+let currentFotoBase64 = '';
+let currentFotoJam = '';
+let _kameraStream = null;
+let _clockSubmitting = false;
+
+// ============================================================
+// CREW TABS
+// ============================================================
+function crewTab(t){
+  ['home','izin','profil'].forEach(x => {
+    document.getElementById('crew-tab-'+x).style.display = x===t ? 'block' : 'none';
+    document.getElementById('cti-'+x).className = 'tab-item'+(x===t?' on':'');
+  });
+}
+
+// ============================================================
+// CREW HOME: LIVE CLOCK + SHIFT CHIP
+// ============================================================
+function updateLiveJam(){
+  const n = new Date();
+  const hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][n.getDay()];
+  const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][n.getMonth()];
+  const tgl = `${hari}, ${n.getDate()} ${bulan} ${n.getFullYear()}`;
+  const jam = String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  const el1 = document.getElementById('live-tgl');
+  const el2 = document.getElementById('live-jam');
+  if(el1) el1.textContent = tgl;
+  if(el2) el2.textContent = jam;
+  // Update shift chip kalau belum clock in
+  if(user && user.role==='crew' && !crewTodayAbsen?.clock_in){
+    renderShiftChip();
+  }
+}
+function renderShiftChip(jamOverride){
+  const area = document.getElementById('shift-chip-area');
+  if(!area || !user || user.role!=='crew') return;
+  const s = getExpectedShift(user.outlet, jamOverride);
+  const isPagi = s.id==='pagi';
+  const col = isPagi ? 'var(--blue)' : 'var(--purple)';
+  const bg = isPagi ? 'var(--blue-bg)' : 'var(--purple-bg)';
+  const icon = isPagi ? '☀️' : '🌙';
+  area.innerHTML = `<span class="shift-chip" style="background:${bg};color:${col}">${icon} ${s.label} · ${s.masuk}–${s.pulang}</span>`;
+}
+
+// ============================================================
+// CREW HOME: STATUS + TOMBOL CI/CO
+// ============================================================
+async function loadTodayAbsen(){
+  try {
+    const data = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&tanggal=eq.'+todayStr()+
+      '&order=created_at.desc&limit=1');
+    crewTodayAbsen = (data && data.length>0) ? data[0] : null;
+  } catch(e){
+    console.warn('Load today absen error:', e);
+    crewTodayAbsen = null;
+  }
+  updateStatusToday();
+}
+
+function updateStatusToday(){
+  const el = document.getElementById('status-today');
+  const ci = document.getElementById('btn-ci');
+  const co = document.getElementById('btn-co');
+  const bL = document.getElementById('btn-libur');
+
+  const a = crewTodayAbsen;
+  const now = new Date();
+  const nowMnt = now.getHours()*60 + now.getMinutes();
+  const dow = now.getDay();
+
+  if(!a){
+    el.innerHTML = '<span style="color:var(--text3)">Belum absen hari ini</span>';
+    ci.disabled = false;
+    co.disabled = true;
+    // Tombol libur: Sen-Jum saja, dan cek belum ambil libur minggu ini (TODO nanti, sekarang selalu tampil)
+    bL.style.display = (dow>=1 && dow<=5) ? 'block' : 'none';
+    return;
+  }
+
+  bL.style.display = 'none';
+
+  // Sudah absen
+  if(a.status === 'libur'){
+    el.innerHTML = '<span class="badge libur">LIBUR</span> <span style="color:var(--text3);font-size:11px;margin-left:4px">Selamat beristirahat 😊</span>';
+    ci.disabled = true; co.disabled = true;
+    return;
+  }
+  if(a.status === 'cuti'){
+    el.innerHTML = '<span class="badge cuti">CUTI</span>';
+    ci.disabled = true; co.disabled = true;
+    return;
+  }
+  if(a.status === 'alpha' && !a.clock_in){
+    el.innerHTML = '<span class="badge alpha">ALPHA</span>';
+    ci.disabled = true; co.disabled = true;
+    return;
+  }
+
+  // Sudah clock in
+  const statusLabel = a.status === 'lembur' ? 'LEMBUR' : 'MASUK';
+  const statusCls = a.status === 'lembur' ? 'lembur' : 'masuk';
+  const lembur = a.lembur_jam>0 ? ` · Lembur <b>${a.lembur_jam} jam</b>` : '';
+  el.innerHTML = `<span class="badge ${statusCls}">${statusLabel}</span><div style="font-size:12px;color:var(--text2);margin-top:6px">Clock In: ${a.clock_in || '—'} · Clock Out: ${a.clock_out || 'belum'}${lembur}</div>`;
+
+  ci.disabled = true;
+
+  if(a.clock_in && !a.clock_out){
+    // Cek apakah boleh clock out (≥ pulang − 30 menit)
+    const shift = getExpectedShift(user.outlet, a.clock_in);
+    const pulangMnt = toMenit(shift.pulang);
+    const boleh = nowMnt >= pulangMnt - 30;
+    co.disabled = !boleh;
+    if(!boleh){
+      const bMnt = pulangMnt - 30;
+      const bH = String(Math.floor(bMnt/60)).padStart(2,'0');
+      const bM = String(bMnt%60).padStart(2,'0');
+      co.textContent = `🔴 Clock Out — Bisa mulai ${bH}:${bM}`;
+    } else {
+      co.textContent = '🔴 Clock Out — Saya Pulang';
+    }
+    // Update shift chip sesuai clock in actual
+    renderShiftChip(a.clock_in);
+  } else {
+    co.disabled = true;
+    co.textContent = '🔴 Clock Out — Selesai';
+  }
+}
+
+// ============================================================
+// RIWAYAT 7 HARI
+// ============================================================
+async function loadRiwayat(){
+  const el = document.getElementById('riwayat-list');
+  el.innerHTML = '<div style="color:var(--text3);font-size:12px">⏳ Memuat...</div>';
+  try {
+    const data = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&order=created_at.desc&limit=7');
+    if(!data || data.length===0){
+      el.innerHTML = '<div style="color:var(--text3);font-size:12px">Belum ada riwayat</div>';
+      return;
+    }
+    el.innerHTML = data.map(a => {
+      const jamInfo = a.clock_in ? `${a.clock_in} – ${a.clock_out||'...'}${a.lembur_jam>0?' · '+a.lembur_jam+'j lembur':''}` : '—';
+      return `
+        <div class="riwayat-item">
+          <div>
+            <div style="font-weight:600">${a.tanggal}</div>
+            <div style="color:var(--text3);font-size:11px">${jamInfo}</div>
+          </div>
+          <span class="badge ${a.status}">${a.status}</span>
+        </div>`;
+    }).join('');
+  } catch(e){
+    el.innerHTML = '<div style="color:var(--red);font-size:12px">Gagal load riwayat</div>';
+  }
+}
+
+// ============================================================
+// CLOCK IN/OUT MODAL
+// ============================================================
+function openClock(type){
+  clockType = type;
+  currentGPS = null;
+  currentGPSAccuracy = null;
+  currentFotoBase64 = '';
+  currentFotoJam = '';
+  document.getElementById('clock-title').textContent = type==='in' ? '🟢 Clock In' : '🔴 Clock Out';
+  document.getElementById('clock-sub').textContent = `${user.nama} · ${user.outlet}`;
+  document.getElementById('foto-box').style.display = 'none';
+  document.getElementById('camera-wrap').style.display = 'none';
+  document.getElementById('btn-buka-kamera').style.display = 'block';
+  document.getElementById('gps-info').textContent = '📡 Mengambil lokasi GPS...';
+  document.getElementById('btn-submit-clock').disabled = true;
+  document.getElementById('btn-submit-clock').textContent = type==='in' ? 'Simpan Clock In' : 'Simpan Clock Out';
+  document.getElementById('modal-clock').classList.add('show');
+  requestGPS();
+}
+
+function closeClockModal(){
+  closeModal('modal-clock');
+  if(_kameraStream){ _kameraStream.getTracks().forEach(t=>t.stop()); _kameraStream=null; }
+}
+
+// ============================================================
+// GPS
+// ============================================================
+function requestGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('gps-info').innerHTML = '<span style="color:var(--red)">❌ GPS tidak didukung browser</span>';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    p => {
+      currentGPS = {lat: p.coords.latitude, lng: p.coords.longitude};
+      currentGPSAccuracy = p.coords.accuracy;
+      const outlet = OUTLETS.find(o => o.nama === user.outlet);
+      const jarak = outlet ? Math.round(jarakMeter(currentGPS.lat, currentGPS.lng, outlet.lat, outlet.lng)) : null;
+
+      if(p.coords.accuracy > 150){
+        document.getElementById('gps-info').innerHTML = `<span style="color:var(--red)">❌ Akurasi GPS terlalu rendah (${Math.round(p.coords.accuracy)}m). Pindah ke tempat terbuka.</span>`;
+        currentGPS = null;
+        checkClockReady();
+        return;
+      }
+
+      const dalam = outlet && jarak <= outlet.radius;
+      const col = dalam ? 'var(--green)' : 'var(--red)';
+      const lbl = dalam ? '✅ Dalam area outlet' : `❌ Di luar area (radius ${outlet?.radius||500}m)`;
+      document.getElementById('gps-info').innerHTML = `
+        <div style="color:${col};font-weight:700">${lbl}</div>
+        <div style="margin-top:4px">Jarak: <b>${jarak}m</b> · Akurasi: ${Math.round(p.coords.accuracy)}m</div>
+      `;
+      if(!dalam) currentGPS = null;
+      checkClockReady();
+    },
+    err => {
+      document.getElementById('gps-info').innerHTML = `<span style="color:var(--red)">❌ Gagal GPS: ${err.message}</span>`;
+      currentGPS = null;
+      checkClockReady();
+    },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+  );
+}
+
+// ============================================================
+// KAMERA + FOTO
+// ============================================================
+let _facingMode = 'user';
+async function bukaKamera(){
+  try {
+    _kameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {facingMode: _facingMode},
+      audio: false
+    });
+    const video = document.getElementById('camera-video');
+    video.srcObject = _kameraStream;
+    document.getElementById('camera-wrap').style.display = 'block';
+    document.getElementById('foto-box').style.display = 'none';
+    document.getElementById('btn-buka-kamera').style.display = 'none';
+  } catch(e){
+    showToast('❌ Gagal buka kamera: '+e.message);
+  }
+}
+function cancelFoto(){
+  if(_kameraStream){ _kameraStream.getTracks().forEach(t=>t.stop()); _kameraStream=null; }
+  document.getElementById('camera-wrap').style.display = 'none';
+  document.getElementById('btn-buka-kamera').style.display = 'block';
+}
+async function captureFoto(){
+  const video = document.getElementById('camera-video');
+  const canvas = document.createElement('canvas');
+  const MAX = 800;
+  let w = video.videoWidth, h = video.videoHeight;
+  if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+  if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if(_facingMode === 'user'){ ctx.translate(w,0); ctx.scale(-1,1); }
+  ctx.drawImage(video, 0, 0, w, h);
+  if(_facingMode === 'user') ctx.setTransform(1,0,0,1,0,0);
+
+  // Watermark
+  const jam = getJam();
+  currentFotoJam = jam;
+  const tgl = todayStr();
+  const gpsInfo = currentGPS ? `${currentGPS.lat.toFixed(4)},${currentGPS.lng.toFixed(4)}` : 'GPS...';
+  const label1 = `${user.nama} · ${user.outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ')}`;
+  const label2 = `${tgl} ${jam} · ${gpsInfo}`;
+
+  // Alamat dari OSM
+  let alamat = '';
+  if(currentGPS){
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentGPS.lat}&lon=${currentGPS.lng}&format=json&addressdetails=1`, {headers:{'Accept-Language':'id'}});
+      const geo = await r.json();
+      if(geo?.address){
+        const a = geo.address;
+        const parts = [a.road||a.pedestrian||'', a.suburb||a.village||a.neighbourhood||'', a.city||a.town||a.municipality||''].filter(Boolean);
+        alamat = parts.slice(0,3).join(', ');
+        if(alamat.length > 45) alamat = alamat.substring(0,45)+'...';
+      }
+    } catch(e){}
+  }
+
+  const barH = alamat ? 52 : 36;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(0, h-barH, w, barH);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 11px Arial';
+  ctx.fillText(label1, 8, h-barH+13);
+  ctx.font = '10px Arial';
+  ctx.fillText(label2, 8, h-barH+27);
+  if(alamat){
+    ctx.font = '9px Arial';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('📍 '+alamat, 8, h-barH+43);
+  }
+
+  const compressed = canvas.toDataURL('image/jpeg', 0.75);
+  currentFotoBase64 = compressed.split(',')[1] || '';
+
+  const fotoBox = document.getElementById('foto-box');
+  fotoBox.innerHTML = `<img src="${compressed}" style="width:100%;display:block"/><div class="foto-preview-ov">Ketuk untuk ulang foto</div>`;
+  fotoBox.style.display = 'block';
+  document.getElementById('camera-wrap').style.display = 'none';
+  document.getElementById('btn-buka-kamera').style.display = 'none';
+
+  if(_kameraStream){ _kameraStream.getTracks().forEach(t=>t.stop()); _kameraStream=null; }
+  checkClockReady();
+}
+
+function checkClockReady(){
+  const ready = currentGPS && currentFotoBase64;
+  document.getElementById('btn-submit-clock').disabled = !ready || _clockSubmitting;
+}
+
+// ============================================================
+// SUBMIT CLOCK IN/OUT
+// ============================================================
+async function submitClock(){
+  if(_clockSubmitting) return;
+  if(!currentGPS){ showToast('❌ GPS belum siap'); return; }
+  if(!currentFotoBase64){ showToast('❌ Foto belum diambil'); return; }
+
+  _clockSubmitting = true;
+  const btn = document.getElementById('btn-submit-clock');
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+
+  const jam = currentFotoJam || getJam();
+  const outlet = OUTLETS.find(o => o.nama === user.outlet);
+  const jarak = outlet ? Math.round(jarakMeter(currentGPS.lat, currentGPS.lng, outlet.lat, outlet.lng)) : null;
+
+  if(clockType === 'in'){
+    // Re-check duplicate at DB
+    try {
+      const existing = await sbGet('absensi',
+        'nama=eq.'+encodeURIComponent(user.nama)+
+        '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+        '&tanggal=eq.'+todayStr());
+      if(existing && existing.length > 0){
+        showToast('⚠️ Kamu sudah absen hari ini!');
+        _clockSubmitting = false;
+        closeClockModal();
+        await loadTodayAbsen();
+        await loadRiwayat();
+        return;
+      }
+    } catch(e){}
+
+    const shift = getExpectedShift(user.outlet, jam);
+    const ok = await sbInsert('absensi', {
+      tanggal: todayStr(),
+      nama: user.nama,
+      outlet_nama: user.outlet,
+      shift: shift.label,
+      clock_in: jam,
+      clock_out: null,
+      gps_lat: currentGPS.lat,
+      gps_lng: currentGPS.lng,
+      jarak: jarak,
+      status: 'masuk',
+      lembur_jam: 0,
+      outlet_asal: user.outlet,
+      perbantuan_ke: null
+    });
+
+    _clockSubmitting = false;
+    btn.textContent = 'Simpan';
+
+    if(ok){
+      showToast('✅ Clock in berhasil! '+jam);
+      closeClockModal();
+      await loadTodayAbsen();
+      await loadRiwayat();
+    } else {
+      showToast('❌ Gagal clock in, coba lagi');
+      btn.disabled = false;
+    }
+  } else {
+    // Clock out
+    if(!crewTodayAbsen || !crewTodayAbsen.clock_in){
+      showToast('❌ Belum clock in hari ini');
+      _clockSubmitting = false;
+      return;
+    }
+    const shift = getExpectedShift(user.outlet, crewTodayAbsen.clock_in);
+    const lj = hitungLemburJam(jam, shift.pulang);
+    const statusFinal = lj > 0 ? 'lembur' : 'masuk';
+
+    const ok = await sbUpdate('absensi', {
+      clock_out: jam,
+      status: statusFinal,
+      lembur_jam: lj
+    }, 'nama=eq.'+encodeURIComponent(user.nama)+
+       '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+       '&tanggal=eq.'+todayStr());
+
+    _clockSubmitting = false;
+    btn.textContent = 'Simpan';
+
+    if(ok){
+      const msg = lj > 0 ? `✅ Clock out! Lembur ${lj} jam 🕐` : `✅ Clock out berhasil! Pulang ${jam}`;
+      showToast(msg);
+      closeClockModal();
+      await loadTodayAbsen();
+      await loadRiwayat();
+    } else {
+      showToast('❌ Gagal clock out, coba lagi');
+      btn.disabled = false;
+    }
+  }
+}
+
+// ============================================================
+// AMBIL LIBUR
+// ============================================================
+async function ambilLibur(){
+  const dow = new Date().getDay();
+  if(dow===0 || dow===6){ showToast('❌ Libur tidak bisa Sabtu/Minggu'); return; }
+  if(!confirm('Ambil libur hari ini?\n\nLibur dibayar jika tidak ada alpha di bulan ini.')) return;
+
+  // Cek ulang di DB
+  try {
+    const existing = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&tanggal=eq.'+todayStr());
+    if(existing && existing.length > 0){
+      showToast('❌ Sudah ada absensi hari ini');
+      return;
+    }
+  } catch(e){}
+
+  const ok = await sbInsert('absensi', {
+    tanggal: todayStr(),
+    nama: user.nama,
+    outlet_nama: user.outlet,
+    shift: null,
+    clock_in: null,
+    clock_out: null,
+    status: 'libur',
+    lembur_jam: 0,
+    outlet_asal: user.outlet
+  });
+
+  if(ok){
+    showToast('✅ Libur dicatat');
+    await loadTodayAbsen();
+    await loadRiwayat();
+  } else {
+    showToast('❌ Gagal, coba lagi');
   }
 }
 
@@ -723,6 +1376,7 @@ function renderCrewList(){
     const norek = c.norek ? `<span style="color:var(--text3);font-size:10px">🏦 ${c.norek}</span>` : '';
     const actionBtns = c.aktif
       ? `<button class="mini-btn edit" onclick="openEditCrew('${c.id}')">Edit</button>
+         <button class="mini-btn" style="color:var(--purple);background:var(--purple-bg)" onclick="openPindahOutlet('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Pindah</button>
          <button class="mini-btn resign" onclick="resignCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Resign</button>`
       : `<button class="mini-btn restore" onclick="restoreCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Aktifkan</button>
          <button class="mini-btn del" onclick="hapusCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Hapus</button>`;
@@ -857,6 +1511,46 @@ async function saveEditCrew(){
 }
 
 // ============================================================
+// PINDAH OUTLET
+// ============================================================
+let currentPindahCrew = null;
+function openPindahOutlet(id, nama){
+  const c = crewCache.find(x => String(x.id) === String(id));
+  if(!c){ showToast('Crew tidak ditemukan'); return; }
+  currentPindahCrew = c;
+  document.getElementById('pindah-info').textContent = `${c.nama} · dari ${c.outlet_nama}`;
+  const sel = document.getElementById('p-outlet');
+  sel.innerHTML = '<option value="">Pilih outlet tujuan...</option>' +
+    OUTLETS.filter(o => o.nama !== c.outlet_nama)
+      .map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
+  document.getElementById('modal-pindah').classList.add('show');
+}
+
+async function savePindahOutlet(){
+  if(!currentPindahCrew) return;
+  const newOutlet = document.getElementById('p-outlet').value;
+  if(!newOutlet){ showToast('❌ Pilih outlet tujuan'); return; }
+
+  const c = currentPindahCrew;
+  if(!confirm(`Pindahkan ${c.nama}?\n\nDari: ${c.outlet_nama}\nKe: ${newOutlet}\n\nAbsensi hari ini dan selanjutnya akan ke outlet baru.`)) return;
+
+  const btn = document.getElementById('btn-save-pindah');
+  btn.disabled = true; btn.textContent = 'Memindahkan...';
+
+  const ok = await sbUpdate('crew', {outlet_nama: newOutlet}, 'id=eq.'+c.id);
+
+  btn.disabled = false; btn.textContent = '💾 Pindahkan';
+
+  if(ok){
+    closeModal('modal-pindah');
+    showToast('✅ '+c.nama+' dipindah ke '+newOutlet);
+    await loadCrewList();
+  } else {
+    showToast('❌ Gagal — mungkin ada nama sama di outlet tujuan');
+  }
+}
+
+// ============================================================
 // RESIGN / RESTORE / HAPUS
 // ============================================================
 async function resignCrew(id, nama){
@@ -916,6 +1610,7 @@ function logout(){
 // INIT
 // ============================================================
 loadOutlets();
+setInterval(updateLiveJam, 1000);
 </script>
 </body>
 </html>
