@@ -209,19 +209,65 @@ body{min-height:100vh}
     </div>
   </div>
 
-  <!-- TAB: IZIN (placeholder) -->
+  <!-- TAB: IZIN -->
   <div class="scroll" id="crew-tab-izin" style="display:none">
-    <div class="soon-box">
-      <div class="icon">📝</div>
-      <div>Ajukan Izin/Cuti akan ditambahkan di Step 3c</div>
+    <div class="card">
+      <div class="card-lbl">📝 Ajukan Izin / Cuti</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5">
+        Izin/cuti perlu persetujuan owner.<br>
+        Libur mingguan (jatah 1x Sen–Jum) tidak perlu izin — langsung tap tombol di Home.
+      </div>
+
+      <div class="field">
+        <label class="lbl">Jenis</label>
+        <select class="input" id="iz-tipe" style="margin-bottom:0">
+          <option value="cuti">Cuti</option>
+          <option value="izin-sakit">Izin Sakit</option>
+          <option value="izin-keperluan">Izin Keperluan</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Tanggal</label>
+        <input class="input" type="date" id="iz-tgl" style="margin-bottom:0"/>
+      </div>
+      <div class="field">
+        <label class="lbl">Keterangan</label>
+        <textarea class="input" id="iz-ket" rows="3" placeholder="Contoh: Sakit demam, ke dokter..." style="margin-bottom:0;resize:vertical;font-family:inherit"></textarea>
+      </div>
+      <button class="btn btn-brand" id="btn-ajukan-izin" onclick="ajukanIzin()">📤 Ajukan</button>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">📋 Riwayat Pengajuan</div>
+      <div id="izin-riwayat" style="font-size:12px">Memuat...</div>
     </div>
   </div>
 
-  <!-- TAB: PROFIL (placeholder) -->
+  <!-- TAB: PROFIL -->
   <div class="scroll" id="crew-tab-profil" style="display:none">
-    <div class="soon-box">
-      <div class="icon">👤</div>
-      <div>Profil & rekap akan ditambahkan di Step 3c</div>
+    <div class="card" style="text-align:center">
+      <div class="bar-avatar" id="profil-av" style="width:60px;height:60px;font-size:22px;margin:0 auto 8px">-</div>
+      <div style="font-size:16px;font-weight:700" id="profil-nama">-</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px" id="profil-outlet">-</div>
+      <div id="profil-tier-chip" style="margin-top:8px"></div>
+      <div id="profil-masa" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl" id="rekap-label">📊 Rekap Bulan Ini</div>
+      <div id="profil-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+      <div id="profil-terhitung" style="margin-top:10px"></div>
+      <div id="profil-formula" style="font-size:11px;color:var(--text2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-top:8px;line-height:1.5"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">💰 Estimasi Gaji Bulan Ini</div>
+      <div id="profil-gaji"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">🏦 Info Rekening</div>
+      <div id="profil-rek" style="font-size:13px;color:var(--text2)"></div>
     </div>
   </div>
 
@@ -290,12 +336,40 @@ body{min-height:100vh}
       <div id="owner-stats" style="font-size:13px;color:var(--text2)">Memuat...</div>
     </div>
     <div class="card">
+      <div class="card-lbl">🔔 Notifikasi Hari Ini</div>
+      <div id="owner-notif-summary" style="font-size:12px;color:var(--text2)">Memuat...</div>
+    </div>
+    <div class="card">
       <div class="card-lbl">🏪 Outlet Terdaftar</div>
       <div id="owner-outlet-list"></div>
     </div>
-    <div class="soon-box">
-      <div class="icon">🚧</div>
-      <div>Dashboard lengkap akan ditambahkan di Step 3+</div>
+  </div>
+
+  <!-- TAB: REKAP -->
+  <div class="scroll" id="owner-tab-rekap" style="display:none">
+    <div class="card">
+      <div class="card-lbl">📅 Rekap Bulanan</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <select class="input" id="rekap-bulan" style="flex:1;margin-bottom:0"></select>
+        <select class="input" id="rekap-tahun" style="width:90px;margin-bottom:0"></select>
+      </div>
+      <select class="input" id="rekap-outlet" style="margin-bottom:0">
+        <option value="">Semua outlet</option>
+      </select>
+      <button class="btn btn-brand" onclick="loadRekap()" style="margin-top:10px">🔍 Tampilkan</button>
+    </div>
+    <div id="rekap-result"></div>
+  </div>
+
+  <!-- TAB: NOTIF -->
+  <div class="scroll" id="owner-tab-notif" style="display:none">
+    <div class="card">
+      <div class="card-lbl">🔔 Pengajuan Izin / Cuti</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="mini-btn" id="nf-pending" style="background:var(--brand);color:white" onclick="filterNotif('pending')">Pending</button>
+        <button class="mini-btn" id="nf-all" style="background:var(--surface2);color:var(--text2)" onclick="filterNotif('all')">Semua</button>
+      </div>
+      <div id="notif-list" style="font-size:13px">Memuat...</div>
     </div>
   </div>
 
@@ -305,11 +379,22 @@ body{min-height:100vh}
       <div class="card-lbl">⚙️ Pilih Outlet untuk Kelola Crew</div>
       <div id="atur-outlet-list"></div>
     </div>
+    <div class="card">
+      <div class="card-lbl">💰 Insentif & Bonus</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Input bulanan insentif/bonus per crew</div>
+      <button class="btn btn-outline" onclick="bukaModalInsentif()" style="margin-bottom:0">💵 Kelola Insentif & Bonus</button>
+    </div>
   </div>
 
   <nav class="tab-nav">
     <button class="tab-item on" id="ti-home" onclick="ownerTab('home')">
       <span class="tab-ico">🏠</span>Home
+    </button>
+    <button class="tab-item" id="ti-rekap" onclick="ownerTab('rekap')">
+      <span class="tab-ico">📅</span>Rekap
+    </button>
+    <button class="tab-item" id="ti-notif" onclick="ownerTab('notif')">
+      <span class="tab-ico">🔔</span>Notif
     </button>
     <button class="tab-item" id="ti-atur" onclick="ownerTab('atur')">
       <span class="tab-ico">⚙️</span>Atur
@@ -447,6 +532,39 @@ body{min-height:100vh}
     <div class="btn-row">
       <button class="btn btn-outline" onclick="closeModal('modal-edit')">Batal</button>
       <button class="btn btn-green" id="btn-save-edit" onclick="saveEditCrew()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: INSENTIF & BONUS -->
+<div class="modal-overlay" id="modal-insentif">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💰 Insentif & Bonus</div>
+    <div class="modal-sub">Input per crew per bulan</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label class="lbl">Outlet</label>
+        <select class="input" id="ins-outlet" style="margin-bottom:0" onchange="loadInsCrew()">
+          <option value="">Pilih outlet...</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Bulan</label>
+        <select class="input" id="ins-bulan" style="margin-bottom:0"></select>
+      </div>
+      <div class="field">
+        <label class="lbl">Tahun</label>
+        <select class="input" id="ins-tahun" style="margin-bottom:0"></select>
+      </div>
+    </div>
+
+    <div id="ins-list" style="margin-top:8px;margin-bottom:14px"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeModal('modal-insentif')">Tutup</button>
+      <button class="btn btn-green" id="btn-save-insentif" onclick="saveInsentif()" style="display:none">💾 Simpan</button>
     </div>
   </div>
 </div>
@@ -652,7 +770,532 @@ async function loginCrew(){
 }
 
 // ============================================================
-// OUTLET JAM KERJA CONFIG (source of truth)
+// CREW: LOAD PROFIL (dipanggil saat buka tab profil)
+// ============================================================
+async function loadProfil(){
+  // Fetch crew data (untuk tier, norek, dll)
+  let crewData = null;
+  try {
+    const d = await sbGet('crew',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&limit=1');
+    crewData = d && d.length > 0 ? d[0] : null;
+  } catch(e){}
+
+  document.getElementById('profil-av').textContent = inisial(user.nama);
+  document.getElementById('profil-nama').textContent = user.nama;
+  document.getElementById('profil-outlet').textContent = user.outlet;
+
+  if(crewData){
+    const tier = hitungTier(crewData.tanggal_masuk, crewData.tanggal_keluar, crewData.gaji_custom);
+    document.getElementById('profil-tier-chip').innerHTML = `<span class="tier-badge ${tier.cls}">${tier.tier} · Rp ${tier.gaji.toLocaleString('id-ID')}/hari</span>`;
+    document.getElementById('profil-masa').textContent = crewData.tanggal_masuk ? 'Masa kerja: '+formatMasaKerja(crewData.tanggal_masuk) : '';
+    document.getElementById('profil-rek').innerHTML = crewData.norek
+      ? `<div>🏦 <b>${crewData.norek}</b></div><div style="font-size:11px;color:var(--text3);margin-top:4px">a/n ${crewData.atas_nama||'-'}</div>`
+      : '<span style="color:var(--text3)">Belum ada info rekening</span>';
+  } else {
+    document.getElementById('profil-tier-chip').innerHTML = '';
+    document.getElementById('profil-masa').textContent = '';
+    document.getElementById('profil-rek').innerHTML = '<span style="color:var(--text3)">-</span>';
+  }
+
+  // Rekap bulan ini
+  const now = new Date();
+  const bulan = now.getMonth()+1;
+  const tahun = now.getFullYear();
+  const bulanStr = String(bulan).padStart(2,'0');
+  const bulanNama = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][bulan];
+  document.getElementById('rekap-label').textContent = `📊 Rekap ${bulanNama} ${tahun}`;
+
+  let masuk=0, libur=0, cuti=0, alpha=0, lemburHari=0, lemburJam=0;
+  try {
+    const absensi = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&tanggal=like.*%2F'+bulanStr+'%2F'+tahun+
+      '&order=tanggal&limit=200');
+    absensi.forEach(a => {
+      if(a.status==='masuk'){ masuk++; }
+      else if(a.status==='lembur'){ masuk++; lemburHari++; lemburJam += parseInt(a.lembur_jam)||0; }
+      else if(a.status==='libur'){ libur++; }
+      else if(a.status==='cuti'){ cuti++; }
+      else if(a.status==='alpha'){ alpha++; }
+    });
+  } catch(e){}
+
+  const hasAlpha = alpha > 0;
+  const terhitung = hasAlpha ? masuk+cuti : masuk+libur+cuti;
+  const totalTercatat = masuk+libur+cuti+alpha;
+
+  document.getElementById('profil-stats').innerHTML = `
+    <div style="text-align:center;padding:8px;background:var(--green-bg);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--green)">${masuk}</div>
+      <div style="font-size:10px;color:var(--text2)">Hari Masuk</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:var(--purple-bg);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--purple)">${libur}</div>
+      <div style="font-size:10px;color:var(--text2)">Libur</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:var(--blue-bg);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--blue)">${cuti}</div>
+      <div style="font-size:10px;color:var(--text2)">Cuti</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:var(--amber-bg);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--amber)">${lemburHari}</div>
+      <div style="font-size:10px;color:var(--text2)">Lembur (hari)</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:var(--red-bg);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--red)">${alpha}</div>
+      <div style="font-size:10px;color:var(--text2)">Alpha</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:var(--surface2);border-radius:8px">
+      <div style="font-size:20px;font-weight:700;color:var(--text)">${lemburJam}j</div>
+      <div style="font-size:10px;color:var(--text2)">Jam Lembur</div>
+    </div>
+  `;
+
+  document.getElementById('profil-terhitung').innerHTML = `
+    <div style="background:${hasAlpha?'var(--red-bg)':'var(--green-bg)'};padding:10px 12px;border-radius:8px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:${hasAlpha?'var(--red)':'var(--green)'}">${terhitung} / ${totalTercatat}</div>
+      <div style="font-size:11px;color:${hasAlpha?'var(--red)':'var(--green)'};margin-top:2px">Terhitung Masuk</div>
+    </div>`;
+
+  document.getElementById('profil-formula').innerHTML = hasAlpha
+    ? `⚠️ Ada <b>${alpha}</b> alpha → libur <b>${libur} hari hangus</b> tidak dibayar<br>Terhitung = masuk + cuti = ${masuk} + ${cuti} = <b>${terhitung}</b>`
+    : `✅ Tidak ada alpha → libur & cuti dibayar<br>Terhitung = masuk + libur + cuti = ${masuk} + ${libur} + ${cuti} = <b>${terhitung}</b>`;
+
+  // Estimasi gaji
+  if(crewData){
+    const tier = hitungTier(crewData.tanggal_masuk, crewData.tanggal_keluar, crewData.gaji_custom);
+    const gajiPokok = tier.gaji * terhitung;
+    const LEMBUR_PER_JAM = 10000; // placeholder — bisa disetting nanti
+    const gajiLembur = lemburJam * LEMBUR_PER_JAM;
+
+    // Ambil insentif & bonus bulan ini
+    let insentif = 0, bonus = 0;
+    try {
+      const d = await sbGet('insentif_bonus',
+        'nama=eq.'+encodeURIComponent(user.nama)+
+        '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+        '&bulan=eq.'+bulan+'&tahun=eq.'+tahun+'&limit=1');
+      if(d && d.length > 0){
+        insentif = d[0].insentif || 0;
+        bonus = d[0].bonus || 0;
+      }
+    } catch(e){}
+
+    const totalGaji = gajiPokok + gajiLembur + insentif + bonus;
+
+    document.getElementById('profil-gaji').innerHTML = `
+      <div style="font-size:12px;color:var(--text2);line-height:1.8">
+        <div style="display:flex;justify-content:space-between"><span>Gaji pokok (${terhitung}× Rp ${tier.gaji.toLocaleString('id-ID')})</span> <b>Rp ${gajiPokok.toLocaleString('id-ID')}</b></div>
+        <div style="display:flex;justify-content:space-between"><span>Lembur (${lemburJam}j × Rp ${LEMBUR_PER_JAM.toLocaleString('id-ID')})</span> <b>Rp ${gajiLembur.toLocaleString('id-ID')}</b></div>
+        <div style="display:flex;justify-content:space-between"><span>Insentif</span> <b>Rp ${insentif.toLocaleString('id-ID')}</b></div>
+        <div style="display:flex;justify-content:space-between"><span>Bonus</span> <b>Rp ${bonus.toLocaleString('id-ID')}</b></div>
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:14px">
+          <b>Total estimasi</b>
+          <b style="color:var(--green);font-size:16px">Rp ${totalGaji.toLocaleString('id-ID')}</b>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">⚠️ Estimasi · final dihitung akhir bulan</div>
+    `;
+  } else {
+    document.getElementById('profil-gaji').innerHTML = '<span style="color:var(--text3);font-size:12px">Data crew belum lengkap</span>';
+  }
+}
+
+// ============================================================
+// CREW: AJUKAN IZIN
+// ============================================================
+async function ajukanIzin(){
+  const tipe = document.getElementById('iz-tipe').value;
+  const tgl = document.getElementById('iz-tgl').value;
+  const ket = document.getElementById('iz-ket').value.trim();
+
+  if(!tgl){ showToast('❌ Pilih tanggal'); return; }
+  if(!ket){ showToast('❌ Isi keterangan'); return; }
+
+  // Convert tgl HTML input (yyyy-mm-dd) ke format aplikasi (dd/mm/yyyy)
+  const [y,m,d] = tgl.split('-');
+  const tglFmt = `${d}/${m}/${y}`;
+
+  const btn = document.getElementById('btn-ajukan-izin');
+  btn.disabled = true; btn.textContent = 'Mengirim...';
+
+  const ok = await sbInsert('notifikasi', {
+    tipe, nama: user.nama, outlet_nama: user.outlet,
+    tanggal: tglFmt, keterangan: ket, status: 'pending'
+  });
+
+  btn.disabled = false; btn.textContent = '📤 Ajukan';
+
+  if(ok){
+    showToast('✅ Pengajuan terkirim, tunggu persetujuan owner');
+    document.getElementById('iz-ket').value = '';
+    document.getElementById('iz-tgl').value = '';
+    loadIzinRiwayat();
+  } else {
+    showToast('❌ Gagal mengirim');
+  }
+}
+
+async function loadIzinRiwayat(){
+  const el = document.getElementById('izin-riwayat');
+  el.innerHTML = '<span style="color:var(--text3)">⏳ Memuat...</span>';
+  try {
+    const data = await sbGet('notifikasi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&order=created_at.desc&limit=10');
+    if(!data || data.length===0){
+      el.innerHTML = '<span style="color:var(--text3)">Belum ada pengajuan</span>';
+      return;
+    }
+    el.innerHTML = data.map(n => {
+      const statusBadge = n.status==='approved' ? '<span style="color:var(--green);font-weight:700">✅ Disetujui</span>'
+        : n.status==='rejected' ? '<span style="color:var(--red);font-weight:700">❌ Ditolak</span>'
+        : '<span style="color:var(--amber);font-weight:700">⏳ Pending</span>';
+      const tipeNama = {cuti:'Cuti','izin-sakit':'Izin Sakit','izin-keperluan':'Izin Keperluan'}[n.tipe] || n.tipe;
+      return `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-weight:600">${tipeNama} · ${n.tanggal}</div>
+              <div style="color:var(--text3);font-size:11px;margin-top:2px">${n.keterangan||''}</div>
+            </div>
+            ${statusBadge}
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e){
+    el.innerHTML = '<span style="color:var(--red)">Gagal memuat</span>';
+  }
+}
+
+// ============================================================
+// OWNER: NOTIFIKASI LIST
+// ============================================================
+let notifFilter = 'pending';
+let notifCache = [];
+
+async function loadNotifList(){
+  const el = document.getElementById('notif-list');
+  el.innerHTML = '<span style="color:var(--text3)">⏳ Memuat...</span>';
+  try {
+    const data = await sbGet('notifikasi', 'order=created_at.desc&limit=50');
+    notifCache = data || [];
+    renderNotifList();
+  } catch(e){
+    el.innerHTML = '<span style="color:var(--red)">Gagal memuat</span>';
+  }
+}
+
+function filterNotif(f){
+  notifFilter = f;
+  document.getElementById('nf-pending').style.background = f==='pending' ? 'var(--brand)' : 'var(--surface2)';
+  document.getElementById('nf-pending').style.color = f==='pending' ? 'white' : 'var(--text2)';
+  document.getElementById('nf-all').style.background = f==='all' ? 'var(--brand)' : 'var(--surface2)';
+  document.getElementById('nf-all').style.color = f==='all' ? 'white' : 'var(--text2)';
+  renderNotifList();
+}
+
+function renderNotifList(){
+  const el = document.getElementById('notif-list');
+  const filtered = notifFilter==='pending'
+    ? notifCache.filter(n => n.status==='pending')
+    : notifCache;
+
+  if(filtered.length===0){
+    el.innerHTML = `<div class="empty-state">${notifFilter==='pending' ? 'Tidak ada pengajuan pending' : 'Belum ada pengajuan'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(n => {
+    const tipeNama = {cuti:'Cuti','izin-sakit':'Izin Sakit','izin-keperluan':'Izin Keperluan','lupa-clockout':'Lupa Clock Out'}[n.tipe] || n.tipe;
+    const actions = n.status==='pending' ? `
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="mini-btn" style="background:var(--green);color:white;flex:1" onclick="approveNotif(${n.id})">✅ Setujui</button>
+        <button class="mini-btn" style="background:var(--red);color:white;flex:1" onclick="rejectNotif(${n.id})">❌ Tolak</button>
+      </div>` : `
+      <div style="font-size:11px;margin-top:4px">${n.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ Sudah disetujui</span>':'<span style="color:var(--red);font-weight:700">❌ Sudah ditolak</span>'}</div>`;
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600">${n.nama} <span style="color:var(--text3);font-weight:400">· ${n.outlet_nama.replace('Momoyo ','').replace('AI-CHA ','')}</span></div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px"><b>${tipeNama}</b> · ${n.tanggal}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${n.keterangan||''}</div>
+          </div>
+        </div>
+        ${actions}
+      </div>`;
+  }).join('');
+}
+
+async function approveNotif(id){
+  const n = notifCache.find(x => x.id===id);
+  if(!n) return;
+  if(!confirm(`Setujui pengajuan ${n.nama} (${n.tipe} ${n.tanggal})?`)) return;
+
+  // Update status notif + insert/update absensi sesuai tipe
+  const ok = await sbUpdate('notifikasi', {status:'approved'}, 'id=eq.'+id);
+  if(!ok){ showToast('❌ Gagal update'); return; }
+
+  // Insert row absensi berdasarkan tipe
+  const absenStatus = n.tipe==='cuti' ? 'cuti' :
+                      n.tipe==='izin-sakit' ? 'cuti' :
+                      n.tipe==='izin-keperluan' ? 'cuti' : 'masuk';
+
+  // Cek apakah sudah ada absensi di tanggal itu
+  try {
+    const exist = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(n.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(n.outlet_nama)+
+      '&tanggal=eq.'+n.tanggal);
+    if(exist && exist.length > 0){
+      // Sudah ada, update status saja
+      await sbUpdate('absensi', {status:absenStatus},
+        'nama=eq.'+encodeURIComponent(n.nama)+
+        '&outlet_nama=eq.'+encodeURIComponent(n.outlet_nama)+
+        '&tanggal=eq.'+n.tanggal);
+    } else {
+      await sbInsert('absensi', {
+        tanggal: n.tanggal, nama: n.nama, outlet_nama: n.outlet_nama,
+        clock_in: null, clock_out: null,
+        status: absenStatus, lembur_jam: 0,
+        outlet_asal: n.outlet_nama
+      });
+    }
+  } catch(e){}
+
+  showToast('✅ Disetujui, absensi tercatat');
+  loadNotifList();
+}
+
+async function rejectNotif(id){
+  const n = notifCache.find(x => x.id===id);
+  if(!n) return;
+  if(!confirm(`Tolak pengajuan ${n.nama}?`)) return;
+  const ok = await sbUpdate('notifikasi', {status:'rejected'}, 'id=eq.'+id);
+  if(ok){ showToast('❌ Ditolak'); loadNotifList(); }
+  else showToast('Gagal');
+}
+
+// ============================================================
+// OWNER: REKAP BULANAN PER OUTLET
+// ============================================================
+function initRekapForm(){
+  // Populate bulan
+  const sb = document.getElementById('rekap-bulan');
+  if(sb.options.length === 0){
+    const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    const now = new Date();
+    sb.innerHTML = bulanNama.map((n,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${n}</option>`).join('');
+  }
+  // Populate tahun
+  const st = document.getElementById('rekap-tahun');
+  if(st.options.length === 0){
+    const y = new Date().getFullYear();
+    st.innerHTML = `<option value="${y-1}">${y-1}</option><option value="${y}" selected>${y}</option>`;
+  }
+  // Populate outlet
+  const so = document.getElementById('rekap-outlet');
+  if(so.options.length <= 1){
+    so.innerHTML = '<option value="">Semua outlet</option>' +
+      OUTLETS.map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
+  }
+}
+
+async function loadRekap(){
+  const bulan = parseInt(document.getElementById('rekap-bulan').value);
+  const tahun = parseInt(document.getElementById('rekap-tahun').value);
+  const outletFilter = document.getElementById('rekap-outlet').value;
+  const bulanStr = String(bulan).padStart(2,'0');
+  const result = document.getElementById('rekap-result');
+  result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
+
+  // Get absensi
+  let query = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=1000';
+  if(outletFilter) query = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+query;
+  let absensi = [];
+  try { absensi = await sbGet('absensi', query); } catch(e){}
+
+  if(!absensi || absensi.length === 0){
+    result.innerHTML = '<div class="card"><div class="empty-state">Belum ada data absensi bulan ini</div></div>';
+    return;
+  }
+
+  // Group per outlet → crew
+  const perOutletCrew = {};
+  absensi.forEach(a => {
+    const key = a.outlet_nama;
+    if(!perOutletCrew[key]) perOutletCrew[key] = {};
+    if(!perOutletCrew[key][a.nama]) perOutletCrew[key][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    const s = perOutletCrew[key][a.nama];
+    if(a.status==='masuk') s.masuk++;
+    else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
+    else if(a.status==='libur') s.libur++;
+    else if(a.status==='cuti') s.cuti++;
+    else if(a.status==='alpha') s.alpha++;
+  });
+
+  // Render
+  let html = '';
+  for(const outlet of Object.keys(perOutletCrew).sort()){
+    const crewMap = perOutletCrew[outlet];
+    const namaList = Object.keys(crewMap).sort();
+    html += `<div class="card">
+      <div class="card-lbl">🏪 ${outlet.replace('Momoyo ','').replace('AI-CHA ','AICHA ')}</div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr style="background:var(--surface2)">
+          <th style="text-align:left;padding:6px">Nama</th>
+          <th style="padding:6px">M</th>
+          <th style="padding:6px">L</th>
+          <th style="padding:6px">C</th>
+          <th style="padding:6px">A</th>
+          <th style="padding:6px">Lbr</th>
+          <th style="padding:6px;color:var(--green)">Trh</th>
+        </tr></thead>
+        <tbody>`;
+    namaList.forEach(nama => {
+      const s = crewMap[nama];
+      const total = s.masuk+s.libur+s.cuti+s.alpha;
+      const terhitung = s.alpha>0 ? s.masuk+s.cuti : s.masuk+s.libur+s.cuti;
+      const col = s.alpha>0 ? 'var(--red)' : 'var(--green)';
+      html += `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px">${nama}</td>
+        <td style="text-align:center;padding:6px">${s.masuk}</td>
+        <td style="text-align:center;padding:6px">${s.libur}</td>
+        <td style="text-align:center;padding:6px">${s.cuti}</td>
+        <td style="text-align:center;padding:6px;color:${s.alpha>0?'var(--red)':'inherit'}">${s.alpha}</td>
+        <td style="text-align:center;padding:6px">${s.lemburHari}(${s.lemburJam}j)</td>
+        <td style="text-align:center;padding:6px;color:${col};font-weight:700">${terhitung}/${total}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px">M=Masuk, L=Libur, C=Cuti, A=Alpha, Lbr=Lembur (hari + jam), Trh=Terhitung</div>';
+    html += '</div>';
+  }
+  result.innerHTML = html;
+}
+
+// ============================================================
+// OWNER: INSENTIF & BONUS
+// ============================================================
+let insCurrentOutlet = null;
+let insCurrentCrews = [];
+let insCurrentData = {};
+
+function bukaModalInsentif(){
+  // Populate selectors
+  const sb = document.getElementById('ins-bulan');
+  if(sb.options.length === 0){
+    const bulanNama = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    const now = new Date();
+    sb.innerHTML = bulanNama.map((n,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${n}</option>`).join('');
+  }
+  const st = document.getElementById('ins-tahun');
+  if(st.options.length === 0){
+    const y = new Date().getFullYear();
+    st.innerHTML = `<option value="${y-1}">${y-1}</option><option value="${y}" selected>${y}</option>`;
+  }
+  const so = document.getElementById('ins-outlet');
+  so.innerHTML = '<option value="">Pilih outlet...</option>' +
+    OUTLETS.map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
+  document.getElementById('ins-list').innerHTML = '<div class="empty-state">Pilih outlet dulu</div>';
+  document.getElementById('btn-save-insentif').style.display = 'none';
+  // Listen perubahan bulan/tahun
+  document.getElementById('ins-bulan').onchange = loadInsCrew;
+  document.getElementById('ins-tahun').onchange = loadInsCrew;
+  document.getElementById('modal-insentif').classList.add('show');
+}
+
+async function loadInsCrew(){
+  const outlet = document.getElementById('ins-outlet').value;
+  const bulan = parseInt(document.getElementById('ins-bulan').value);
+  const tahun = parseInt(document.getElementById('ins-tahun').value);
+  if(!outlet){
+    document.getElementById('ins-list').innerHTML = '<div class="empty-state">Pilih outlet dulu</div>';
+    document.getElementById('btn-save-insentif').style.display = 'none';
+    return;
+  }
+  insCurrentOutlet = outlet;
+  const el = document.getElementById('ins-list');
+  el.innerHTML = '<div class="empty-state">⏳ Memuat...</div>';
+
+  try {
+    const crews = await sbGet('crew',
+      'select=id,nama&outlet_nama=eq.'+encodeURIComponent(outlet)+
+      '&aktif=eq.true&order=nama');
+    insCurrentCrews = crews || [];
+
+    // Fetch existing data
+    const existing = await sbGet('insentif_bonus',
+      'outlet_nama=eq.'+encodeURIComponent(outlet)+
+      '&bulan=eq.'+bulan+'&tahun=eq.'+tahun);
+    insCurrentData = {};
+    (existing||[]).forEach(e => { insCurrentData[e.nama] = e; });
+
+    if(insCurrentCrews.length === 0){
+      el.innerHTML = '<div class="empty-state">Belum ada crew di outlet ini</div>';
+      document.getElementById('btn-save-insentif').style.display = 'none';
+      return;
+    }
+
+    el.innerHTML = insCurrentCrews.map((c,i) => {
+      const d = insCurrentData[c.nama] || {insentif:0, bonus:0};
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px">${c.nama}</div>
+        <div style="display:flex;gap:6px">
+          <input type="number" class="input" id="ins-${i}" value="${d.insentif||''}" placeholder="Insentif" style="margin-bottom:0;flex:1;font-size:12px;padding:6px 10px">
+          <input type="number" class="input" id="bon-${i}" value="${d.bonus||''}" placeholder="Bonus" style="margin-bottom:0;flex:1;font-size:12px;padding:6px 10px">
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('btn-save-insentif').style.display = 'block';
+  } catch(e){
+    el.innerHTML = '<div class="empty-state" style="color:var(--red)">Gagal memuat</div>';
+  }
+}
+
+async function saveInsentif(){
+  const bulan = parseInt(document.getElementById('ins-bulan').value);
+  const tahun = parseInt(document.getElementById('ins-tahun').value);
+  const btn = document.getElementById('btn-save-insentif');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  let success = 0, fail = 0;
+  for(let i=0; i<insCurrentCrews.length; i++){
+    const c = insCurrentCrews[i];
+    const insentif = parseInt(document.getElementById('ins-'+i).value) || 0;
+    const bonus = parseInt(document.getElementById('bon-'+i).value) || 0;
+    if(insentif === 0 && bonus === 0) continue; // skip empty
+
+    const existing = insCurrentData[c.nama];
+    let ok;
+    if(existing){
+      ok = await sbUpdate('insentif_bonus', {insentif, bonus},
+        'nama=eq.'+encodeURIComponent(c.nama)+
+        '&outlet_nama=eq.'+encodeURIComponent(insCurrentOutlet)+
+        '&bulan=eq.'+bulan+'&tahun=eq.'+tahun);
+    } else {
+      ok = await sbInsert('insentif_bonus', {
+        nama: c.nama, outlet_nama: insCurrentOutlet,
+        bulan, tahun, insentif, bonus
+      });
+    }
+    if(ok) success++; else fail++;
+  }
+
+  btn.disabled = false; btn.textContent = '💾 Simpan';
+  if(fail === 0) showToast(`✅ ${success} data tersimpan`);
+  else showToast(`⚠️ ${success} sukses, ${fail} gagal`);
+  closeModal('modal-insentif');
+}
+
+// ============================================================
+// CREW TAB — trigger load pas buka tab
 // ============================================================
 const OUTLET_JAM_DEFAULT = {
   weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
@@ -740,6 +1383,8 @@ function crewTab(t){
     document.getElementById('crew-tab-'+x).style.display = x===t ? 'block' : 'none';
     document.getElementById('cti-'+x).className = 'tab-item'+(x===t?' on':'');
   });
+  if(t==='profil') loadProfil();
+  if(t==='izin') loadIzinRiwayat();
 }
 
 // ============================================================
@@ -1217,11 +1862,16 @@ async function loginOwner(){
 // OWNER TABS
 // ============================================================
 function ownerTab(t){
-  document.getElementById('owner-tab-home').style.display = t==='home' ? 'block' : 'none';
-  document.getElementById('owner-tab-atur').style.display = t==='atur' ? 'block' : 'none';
-  document.getElementById('ti-home').className = 'tab-item'+(t==='home'?' on':'');
-  document.getElementById('ti-atur').className = 'tab-item'+(t==='atur'?' on':'');
+  ['home','rekap','notif','atur'].forEach(x => {
+    const el = document.getElementById('owner-tab-'+x);
+    if(el) el.style.display = x===t ? 'block' : 'none';
+    const btn = document.getElementById('ti-'+x);
+    if(btn) btn.className = 'tab-item'+(x===t?' on':'');
+  });
   if(t==='atur') renderAturOutletList();
+  if(t==='rekap') initRekapForm();
+  if(t==='notif') loadNotifList();
+  if(t==='home') renderOwnerHome();
 }
 
 async function renderOwnerHome(){
@@ -1235,6 +1885,17 @@ async function renderOwnerHome(){
       </div>`;
   } catch(e){
     document.getElementById('owner-stats').innerHTML = '<span style="color:var(--red)">Gagal load stats</span>';
+  }
+
+  // Notif summary
+  try {
+    const pending = await sbGet('notifikasi', 'select=id&status=eq.pending');
+    const n = pending.length;
+    document.getElementById('owner-notif-summary').innerHTML = n > 0
+      ? `<span style="color:var(--red);font-weight:700">🔔 ${n} pengajuan menunggu persetujuan</span> <a href="#" onclick="ownerTab('notif');return false" style="color:var(--brand);margin-left:6px">Lihat →</a>`
+      : '<span style="color:var(--text3)">✨ Tidak ada pengajuan pending</span>';
+  } catch(e){
+    document.getElementById('owner-notif-summary').innerHTML = '<span style="color:var(--text3)">-</span>';
   }
 
   // Outlet list
