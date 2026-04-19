@@ -59,6 +59,60 @@ body{min-height:100vh}
 /* Toast */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:white;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;max-width:90%;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* TAB NAV (bottom) */
+.tab-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;max-width:100%}
+.tab-item{flex:1;padding:10px 0;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--text3);font-weight:600;font-size:11px}
+.tab-item.on{color:var(--brand)}
+.tab-ico{font-size:20px;line-height:1}
+
+/* OWNER OUTLET LIST */
+.outlet-row{display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px;cursor:pointer;transition:all .15s}
+.outlet-row:hover{border-color:var(--brand);background:var(--brand-bg)}
+.outlet-ico{width:36px;height:36px;border-radius:8px;background:var(--brand-bg);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.outlet-name{flex:1;min-width:0;font-weight:600;font-size:14px}
+.outlet-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.chevron{color:var(--text3);font-size:20px}
+
+/* CREW LIST */
+.crew-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.crew-row:last-child{border-bottom:none}
+.crew-av{width:32px;height:32px;border-radius:50%;background:var(--surface2);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.crew-info{flex:1;min-width:0}
+.crew-nama{font-size:13px;font-weight:600;line-height:1.2}
+.crew-sub{font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.crew-actions{display:flex;gap:4px}
+.mini-btn{border:none;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer}
+.mini-btn.edit{color:var(--blue);background:var(--blue-bg)}
+.mini-btn.resign{color:var(--amber);background:var(--amber-bg)}
+.mini-btn.restore{color:var(--green);background:var(--green-bg)}
+.mini-btn.del{color:var(--red);background:var(--red-bg)}
+
+/* TIER BADGE */
+.tier-badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700}
+.tier-training{background:#FFE4E6;color:#BE123C}
+.tier-t3{background:var(--green-bg);color:var(--green)}
+.tier-t2{background:var(--amber-bg);color:var(--amber)}
+.tier-t1{background:#FCE7F3;color:#BE185D}
+.tier-custom{background:var(--purple-bg);color:var(--purple)}
+.tier-resign{background:#E5E7EB;color:#6B7280}
+
+/* MODAL */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);width:100%;max-width:500px;max-height:90vh;border-radius:16px 16px 0 0;padding:16px 16px 20px;overflow-y:auto}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 12px}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:14px}
+.field{margin-bottom:12px}
+.field-row{display:flex;gap:8px}
+.field-row .field{flex:1}
+.info-line{font-size:11px;color:var(--text2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-top:4px;line-height:1.5}
+.btn-row{display:flex;gap:8px;margin-top:4px}
+.btn-outline{background:white;border:1px solid var(--border);color:var(--text2)}
+.btn-green{background:var(--green);color:white}
+.btn-red{background:var(--red);color:white}
+.empty-state{text-align:center;padding:30px 20px;color:var(--text3);font-size:13px}
 </style>
 </head>
 <body>
@@ -132,21 +186,151 @@ body{min-height:100vh}
     <div class="bar-avatar" style="background:var(--amber-bg);color:var(--amber)">👑</div>
     <div class="bar-info">
       <div class="bar-nama">Owner</div>
-      <div class="bar-outlet">Akses penuh · Momoyo Ice Cream</div>
+      <div class="bar-outlet">Momoyo Ice Cream · V2</div>
     </div>
     <button class="logout-btn" onclick="logout()">Keluar</button>
   </div>
-  <div class="scroll">
+
+  <!-- TAB: HOME -->
+  <div class="scroll" id="owner-tab-home">
     <div class="card">
-      <div class="card-lbl">✅ Login owner berhasil</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.5">
-        Step 1 sukses — koneksi Supabase OK, password owner valid.<br><br>
-        Halaman owner lengkap (dashboard, rekap, atur crew, notifikasi telat) akan ditambahkan di <b>Step 3+</b>.
-      </div>
+      <div class="card-lbl">📊 Ringkasan</div>
+      <div id="owner-stats" style="font-size:13px;color:var(--text2)">Memuat...</div>
     </div>
     <div class="card">
-      <div class="card-lbl">📊 Outlet Terdaftar</div>
-      <div id="owner-outlet-list" style="font-size:13px"></div>
+      <div class="card-lbl">🏪 Outlet Terdaftar</div>
+      <div id="owner-outlet-list"></div>
+    </div>
+    <div class="soon-box">
+      <div class="icon">🚧</div>
+      <div>Dashboard lengkap akan ditambahkan di Step 3+</div>
+    </div>
+  </div>
+
+  <!-- TAB: ATUR -->
+  <div class="scroll" id="owner-tab-atur" style="display:none">
+    <div class="card">
+      <div class="card-lbl">⚙️ Pilih Outlet untuk Kelola Crew</div>
+      <div id="atur-outlet-list"></div>
+    </div>
+  </div>
+
+  <nav class="tab-nav">
+    <button class="tab-item on" id="ti-home" onclick="ownerTab('home')">
+      <span class="tab-ico">🏠</span>Home
+    </button>
+    <button class="tab-item" id="ti-atur" onclick="ownerTab('atur')">
+      <span class="tab-ico">⚙️</span>Atur
+    </button>
+  </nav>
+</div>
+
+<!-- OWNER: CREW LIST (per outlet) -->
+<div class="screen" id="sc-owner-crew">
+  <div class="bar">
+    <button class="logout-btn" style="padding:6px 10px" onclick="showScreen('sc-owner-home');ownerTab('atur')">← Kembali</button>
+    <div class="bar-info">
+      <div class="bar-nama" id="crew-outlet-title">-</div>
+      <div class="bar-outlet" id="crew-outlet-sub">-</div>
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="card-lbl" style="margin-bottom:0">👥 Daftar Crew</div>
+        <button class="mini-btn" style="background:var(--brand);color:white;padding:6px 12px" onclick="openModalTambahCrew()">+ Tambah</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="mini-btn" id="filter-aktif" style="background:var(--brand);color:white" onclick="setFilterCrew('aktif')">Aktif</button>
+        <button class="mini-btn" id="filter-resign" style="background:var(--surface2);color:var(--text2)" onclick="setFilterCrew('resign')">Resign</button>
+      </div>
+      <div id="crew-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: TAMBAH CREW -->
+<div class="modal-overlay" id="modal-tambah">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">➕ Tambah Crew Baru</div>
+    <div class="modal-sub" id="tambah-outlet-label">-</div>
+
+    <div class="field">
+      <label class="lbl">Nama Lengkap *</label>
+      <input class="input" id="t-nama" placeholder="Contoh: Melany Devitasari" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Nama Panggilan</label>
+      <input class="input" id="t-panggilan" placeholder="Contoh: Melany" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Tanggal Masuk Kerja *</label>
+      <input class="input" type="date" id="t-tgl-masuk" style="margin-bottom:0"/>
+      <div class="info-line" id="t-tier-info">Tier akan di-hitung otomatis dari tanggal masuk</div>
+    </div>
+    <div class="field">
+      <label class="lbl">No. Rekening</label>
+      <input class="input" type="text" inputmode="numeric" id="t-norek" placeholder="Contoh: 0812345678" style="margin-bottom:0"/>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Ketik manual, angka 0 di depan aman</div>
+    </div>
+    <div class="field">
+      <label class="lbl">Atas Nama Rekening</label>
+      <input class="input" id="t-atas-nama" placeholder="Nama pemilik rekening" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Gaji Custom (Rp/hari)</label>
+      <input class="input" type="number" id="t-gaji-custom" placeholder="Kosong = pakai tier otomatis" style="margin-bottom:0"/>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeModal('modal-tambah')">Batal</button>
+      <button class="btn btn-green" id="btn-save-tambah" onclick="saveTambahCrew()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT CREW -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Edit Crew</div>
+    <div class="modal-sub" id="edit-outlet-label">-</div>
+
+    <div class="field">
+      <label class="lbl">Nama Lengkap</label>
+      <input class="input" id="e-nama" readonly style="background:var(--surface2);margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Nama Panggilan</label>
+      <input class="input" id="e-panggilan" placeholder="Contoh: Melany" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Tanggal Masuk Kerja</label>
+      <input class="input" type="date" id="e-tgl-masuk" style="margin-bottom:0"/>
+      <div class="info-line" id="e-tier-info">-</div>
+    </div>
+    <div class="field">
+      <label class="lbl">Tanggal Keluar (Resign)</label>
+      <input class="input" type="date" id="e-tgl-keluar" style="margin-bottom:0"/>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Isi kalau crew resign. Kosong = masih aktif.</div>
+    </div>
+    <div class="field">
+      <label class="lbl">No. Rekening</label>
+      <input class="input" type="text" inputmode="numeric" id="e-norek" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Atas Nama Rekening</label>
+      <input class="input" id="e-atas-nama" style="margin-bottom:0"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Gaji Custom (Rp/hari)</label>
+      <input class="input" type="number" id="e-gaji-custom" placeholder="Kosong = pakai tier otomatis" style="margin-bottom:0"/>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit')">Batal</button>
+      <button class="btn btn-green" id="btn-save-edit" onclick="saveEditCrew()">💾 Simpan</button>
     </div>
   </div>
 </div>
@@ -365,21 +549,353 @@ async function loginOwner(){
     }
 
     user = { role: 'owner' };
-
-    // Tampilkan daftar outlet di owner home
-    const list = document.getElementById('owner-outlet-list');
-    list.innerHTML = OUTLETS.map(o => `
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span>${o.nama}</span>
-        <span style="color:var(--text3);font-size:11px">Aktif</span>
-      </div>`).join('');
-
     showScreen('sc-owner-home');
+    renderOwnerHome();
     showToast('Login owner berhasil 👑');
   } catch(e){
     showErr('Gagal login: '+e.message);
   }
 }
+
+// ============================================================
+// OWNER TABS
+// ============================================================
+function ownerTab(t){
+  document.getElementById('owner-tab-home').style.display = t==='home' ? 'block' : 'none';
+  document.getElementById('owner-tab-atur').style.display = t==='atur' ? 'block' : 'none';
+  document.getElementById('ti-home').className = 'tab-item'+(t==='home'?' on':'');
+  document.getElementById('ti-atur').className = 'tab-item'+(t==='atur'?' on':'');
+  if(t==='atur') renderAturOutletList();
+}
+
+async function renderOwnerHome(){
+  // Stats ringkas
+  try {
+    const totalCrew = await sbGet('crew', 'select=id&aktif=eq.true');
+    document.getElementById('owner-stats').innerHTML = `
+      <div style="display:flex;gap:14px">
+        <div><b style="font-size:20px;color:var(--brand)">${OUTLETS.length}</b> <span style="color:var(--text3);font-size:11px">Outlet</span></div>
+        <div><b style="font-size:20px;color:var(--green)">${totalCrew.length}</b> <span style="color:var(--text3);font-size:11px">Crew aktif</span></div>
+      </div>`;
+  } catch(e){
+    document.getElementById('owner-stats').innerHTML = '<span style="color:var(--red)">Gagal load stats</span>';
+  }
+
+  // Outlet list
+  const list = document.getElementById('owner-outlet-list');
+  list.innerHTML = OUTLETS.map(o => `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>${o.nama.replace('Momoyo ','').replace('AI-CHA ','AI-CHA ')}</span>
+      <span style="color:var(--text3);font-size:11px">${o.nama.startsWith('Momoyo')?'Momoyo':'AI-CHA'}</span>
+    </div>`).join('');
+}
+
+// ============================================================
+// TAB ATUR — LIST OUTLET
+// ============================================================
+async function renderAturOutletList(){
+  const list = document.getElementById('atur-outlet-list');
+  list.innerHTML = '<div style="color:var(--text3);font-size:13px">Memuat...</div>';
+
+  // Hitung jumlah crew per outlet (dalam 1 query)
+  let crewCountMap = {};
+  try {
+    const crews = await sbGet('crew', 'select=outlet_nama&aktif=eq.true');
+    crews.forEach(c => {
+      crewCountMap[c.outlet_nama] = (crewCountMap[c.outlet_nama]||0) + 1;
+    });
+  } catch(e){}
+
+  list.innerHTML = OUTLETS.map(o => {
+    const count = crewCountMap[o.nama] || 0;
+    return `
+      <div class="outlet-row" onclick="openCrewList('${o.nama.replace(/'/g,"\\'")}')">
+        <div class="outlet-ico">🏪</div>
+        <div style="flex:1;min-width:0">
+          <div class="outlet-name">${o.nama.replace('Momoyo ','').replace('AI-CHA ','AICHA ')}</div>
+          <div class="outlet-meta">${count} crew aktif</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>`;
+  }).join('');
+}
+
+// ============================================================
+// TIER CALCULATION
+// ============================================================
+function hitungTier(tglMasuk, tglKeluar, gajiCustom){
+  // Return: {tier, gaji, warna_class}
+  if(tglKeluar) return {tier:'Resign', gaji:0, cls:'tier-resign'};
+  if(gajiCustom) return {tier:'Custom', gaji:parseInt(gajiCustom), cls:'tier-custom'};
+  if(!tglMasuk) return {tier:'Tier 3', gaji:60000, cls:'tier-t3'};
+
+  const masuk = new Date(tglMasuk);
+  const now = new Date();
+  const hariKerja = Math.floor((now - masuk) / (1000*60*60*24));
+
+  // Training: 0-14 hari kalender sejak masuk
+  if(hariKerja < 14) return {tier:'Training', gaji:45000, cls:'tier-training'};
+
+  // Hitung masa kerja (bulan)
+  let y = now.getFullYear()-masuk.getFullYear();
+  let m = now.getMonth()-masuk.getMonth();
+  if(m<0){ y--; m+=12; }
+  const masaBulan = y*12 + m;
+
+  if(masaBulan >= 31) return {tier:'Tier 1', gaji:75000, cls:'tier-t1'};  // 2 thn 7 bln
+  if(masaBulan >= 13) return {tier:'Tier 2', gaji:67500, cls:'tier-t2'};  // 1 thn 1 bln
+  return {tier:'Tier 3', gaji:60000, cls:'tier-t3'};
+}
+
+function formatMasaKerja(tglMasuk){
+  if(!tglMasuk) return '-';
+  const masuk = new Date(tglMasuk);
+  const now = new Date();
+  const days = Math.floor((now - masuk) / (1000*60*60*24));
+  if(days < 14) return `${days} hari (Training)`;
+  let y = now.getFullYear()-masuk.getFullYear();
+  let m = now.getMonth()-masuk.getMonth();
+  if(m<0){ y--; m+=12; }
+  if(y===0) return `${m} bulan`;
+  return `${y} thn ${m} bln`;
+}
+
+function tierInfoHTML(tglMasuk, tglKeluar, gajiCustom){
+  const t = hitungTier(tglMasuk, tglKeluar, gajiCustom);
+  const masa = formatMasaKerja(tglMasuk);
+  if(t.tier === 'Resign') return `Status: <b>Resign</b>`;
+  return `Masa kerja: <b>${masa}</b> · Tier: <b>${t.tier}</b> · Gaji: <b>Rp ${t.gaji.toLocaleString('id-ID')}/hari</b>`;
+}
+
+// ============================================================
+// CREW LIST (per outlet)
+// ============================================================
+let currentOutletKelola = null;
+let filterCrew = 'aktif'; // 'aktif' | 'resign'
+let crewCache = [];
+
+async function openCrewList(outletNama){
+  currentOutletKelola = outletNama;
+  filterCrew = 'aktif';
+  document.getElementById('crew-outlet-title').textContent = outletNama;
+  document.getElementById('crew-outlet-sub').textContent = 'Kelola crew';
+  setFilterCrew('aktif', true);
+  showScreen('sc-owner-crew');
+  await loadCrewList();
+}
+
+function setFilterCrew(f, skipReload){
+  filterCrew = f;
+  document.getElementById('filter-aktif').style.background = f==='aktif' ? 'var(--brand)' : 'var(--surface2)';
+  document.getElementById('filter-aktif').style.color = f==='aktif' ? 'white' : 'var(--text2)';
+  document.getElementById('filter-resign').style.background = f==='resign' ? 'var(--brand)' : 'var(--surface2)';
+  document.getElementById('filter-resign').style.color = f==='resign' ? 'white' : 'var(--text2)';
+  if(!skipReload) renderCrewList();
+}
+
+async function loadCrewList(){
+  const list = document.getElementById('crew-list');
+  list.innerHTML = '<div class="empty-state">⏳ Memuat...</div>';
+  try {
+    const data = await sbGet('crew',
+      'outlet_nama=eq.'+encodeURIComponent(currentOutletKelola)+
+      '&order=aktif.desc,nama');
+    crewCache = data || [];
+    renderCrewList();
+  } catch(e){
+    list.innerHTML = '<div class="empty-state" style="color:var(--red)">Gagal memuat crew</div>';
+  }
+}
+
+function renderCrewList(){
+  const list = document.getElementById('crew-list');
+  const filtered = crewCache.filter(c => filterCrew==='aktif' ? c.aktif : !c.aktif);
+
+  if(filtered.length === 0){
+    const msg = filterCrew==='aktif' ? 'Belum ada crew aktif. Tap "+ Tambah" untuk mulai.' : 'Tidak ada crew yang resign.';
+    list.innerHTML = `<div class="empty-state">${msg}</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(c => {
+    const tier = hitungTier(c.tanggal_masuk, c.tanggal_keluar, c.gaji_custom);
+    const panggilan = c.nama_panggilan ? ' · '+c.nama_panggilan : '';
+    const norek = c.norek ? `<span style="color:var(--text3);font-size:10px">🏦 ${c.norek}</span>` : '';
+    const actionBtns = c.aktif
+      ? `<button class="mini-btn edit" onclick="openEditCrew('${c.id}')">Edit</button>
+         <button class="mini-btn resign" onclick="resignCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Resign</button>`
+      : `<button class="mini-btn restore" onclick="restoreCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Aktifkan</button>
+         <button class="mini-btn del" onclick="hapusCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Hapus</button>`;
+    return `
+      <div class="crew-row">
+        <div class="crew-av">${inisial(c.nama)}</div>
+        <div class="crew-info">
+          <div class="crew-nama">${c.nama}${panggilan}</div>
+          <div class="crew-sub">
+            <span class="tier-badge ${tier.cls}">${tier.tier}${tier.gaji>0?' · Rp '+tier.gaji.toLocaleString('id-ID'):''}</span>
+            ${norek}
+          </div>
+        </div>
+        <div class="crew-actions">${actionBtns}</div>
+      </div>`;
+  }).join('');
+}
+
+// ============================================================
+// TAMBAH CREW
+// ============================================================
+function openModalTambahCrew(){
+  document.getElementById('tambah-outlet-label').textContent = currentOutletKelola;
+  ['t-nama','t-panggilan','t-tgl-masuk','t-norek','t-atas-nama','t-gaji-custom'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('t-tier-info').innerHTML = 'Tier akan di-hitung otomatis dari tanggal masuk';
+  // Live update tier info saat ganti tgl/gaji
+  document.getElementById('t-tgl-masuk').oninput = updateTierInfoTambah;
+  document.getElementById('t-gaji-custom').oninput = updateTierInfoTambah;
+  document.getElementById('modal-tambah').classList.add('show');
+}
+function updateTierInfoTambah(){
+  const tgl = document.getElementById('t-tgl-masuk').value;
+  const gaji = document.getElementById('t-gaji-custom').value;
+  document.getElementById('t-tier-info').innerHTML = tgl ? tierInfoHTML(tgl, null, gaji) : 'Tier akan di-hitung otomatis dari tanggal masuk';
+}
+
+async function saveTambahCrew(){
+  const nama = document.getElementById('t-nama').value.trim();
+  const panggilan = document.getElementById('t-panggilan').value.trim() || null;
+  const tglMasuk = document.getElementById('t-tgl-masuk').value || null;
+  const norek = document.getElementById('t-norek').value.trim() || null;
+  const atasNama = document.getElementById('t-atas-nama').value.trim() || null;
+  const gajiCustom = parseInt(document.getElementById('t-gaji-custom').value) || null;
+
+  if(!nama){ showToast('❌ Nama wajib diisi'); return; }
+  if(!tglMasuk){ showToast('❌ Tanggal masuk wajib diisi'); return; }
+
+  const btn = document.getElementById('btn-save-tambah');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  const ok = await sbInsert('crew', {
+    nama, nama_panggilan: panggilan, outlet_nama: currentOutletKelola,
+    tanggal_masuk: tglMasuk, norek, atas_nama: atasNama,
+    gaji_custom: gajiCustom, aktif: true
+  });
+
+  btn.disabled = false; btn.textContent = '💾 Simpan';
+
+  if(ok){
+    closeModal('modal-tambah');
+    showToast('✅ '+nama+' ditambahkan');
+    await loadCrewList();
+  } else {
+    showToast('❌ Gagal — nama mungkin sudah ada di outlet ini');
+  }
+}
+
+// ============================================================
+// EDIT CREW
+// ============================================================
+let currentEditCrew = null;
+
+function openEditCrew(id){
+  const c = crewCache.find(x => String(x.id) === String(id));
+  if(!c){ showToast('Crew tidak ditemukan'); return; }
+  currentEditCrew = c;
+  document.getElementById('edit-outlet-label').textContent = c.outlet_nama;
+  document.getElementById('e-nama').value = c.nama;
+  document.getElementById('e-panggilan').value = c.nama_panggilan || '';
+  document.getElementById('e-tgl-masuk').value = c.tanggal_masuk || '';
+  document.getElementById('e-tgl-keluar').value = c.tanggal_keluar || '';
+  document.getElementById('e-norek').value = c.norek || '';
+  document.getElementById('e-atas-nama').value = c.atas_nama || '';
+  document.getElementById('e-gaji-custom').value = c.gaji_custom || '';
+  document.getElementById('e-tier-info').innerHTML = tierInfoHTML(c.tanggal_masuk, c.tanggal_keluar, c.gaji_custom);
+  document.getElementById('e-tgl-masuk').oninput = updateTierInfoEdit;
+  document.getElementById('e-tgl-keluar').oninput = updateTierInfoEdit;
+  document.getElementById('e-gaji-custom').oninput = updateTierInfoEdit;
+  document.getElementById('modal-edit').classList.add('show');
+}
+function updateTierInfoEdit(){
+  const tgl = document.getElementById('e-tgl-masuk').value;
+  const keluar = document.getElementById('e-tgl-keluar').value;
+  const gaji = document.getElementById('e-gaji-custom').value;
+  document.getElementById('e-tier-info').innerHTML = tierInfoHTML(tgl, keluar, gaji);
+}
+
+async function saveEditCrew(){
+  if(!currentEditCrew) return;
+  const c = currentEditCrew;
+  const btn = document.getElementById('btn-save-edit');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  const panggilan = document.getElementById('e-panggilan').value.trim() || null;
+  const tglMasuk = document.getElementById('e-tgl-masuk').value || null;
+  const tglKeluar = document.getElementById('e-tgl-keluar').value || null;
+  const norek = document.getElementById('e-norek').value.trim() || null;
+  const atasNama = document.getElementById('e-atas-nama').value.trim() || null;
+  const gajiCustom = parseInt(document.getElementById('e-gaji-custom').value) || null;
+  const aktif = !tglKeluar; // kalau ada tgl keluar, otomatis tidak aktif
+
+  const ok = await sbUpdate('crew', {
+    nama_panggilan: panggilan,
+    tanggal_masuk: tglMasuk,
+    tanggal_keluar: tglKeluar,
+    norek, atas_nama: atasNama,
+    gaji_custom: gajiCustom,
+    aktif
+  }, 'id=eq.'+c.id);
+
+  btn.disabled = false; btn.textContent = '💾 Simpan';
+
+  if(ok){
+    closeModal('modal-edit');
+    showToast('✅ Data '+c.nama+' disimpan');
+    await loadCrewList();
+  } else {
+    showToast('❌ Gagal simpan');
+  }
+}
+
+// ============================================================
+// RESIGN / RESTORE / HAPUS
+// ============================================================
+async function resignCrew(id, nama){
+  if(!confirm(`Resign ${nama}?\n\nCrew akan dipindah ke tab "Resign". Data absensi tetap tersimpan.`)) return;
+  const today = new Date().toISOString().split('T')[0];
+  const ok = await sbUpdate('crew', {aktif:false, tanggal_keluar: today}, 'id=eq.'+id);
+  if(ok){ showToast('✅ '+nama+' di-resign'); await loadCrewList(); }
+  else showToast('❌ Gagal');
+}
+
+async function restoreCrew(id, nama){
+  if(!confirm(`Aktifkan kembali ${nama}?\n\nTanggal keluar akan dihapus.`)) return;
+  const ok = await sbUpdate('crew', {aktif:true, tanggal_keluar: null}, 'id=eq.'+id);
+  if(ok){ showToast('✅ '+nama+' diaktifkan'); await loadCrewList(); }
+  else showToast('❌ Gagal');
+}
+
+async function hapusCrew(id, nama){
+  if(!confirm(`HAPUS PERMANEN ${nama}?\n\n⚠️ Ini akan menghapus data crew dari DB. Hanya bisa untuk crew resign.\n\nTekan OK untuk konfirmasi.`)) return;
+  // Delete pakai DELETE HTTP method
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/crew?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: {'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer '+SUPABASE_ANON_KEY}
+    });
+    if(r.ok){ showToast('✅ '+nama+' dihapus permanen'); await loadCrewList(); }
+    else showToast('❌ Gagal — mungkin ada absensi terkait');
+  } catch(e){
+    showToast('❌ Error: '+e.message);
+  }
+}
+
+// ============================================================
+// MODAL HELPER
+// ============================================================
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('show'); });
+});
 
 // ============================================================
 // LOGOUT
