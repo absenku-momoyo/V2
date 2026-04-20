@@ -641,6 +641,47 @@ body{min-height:100vh}
   </div>
 </div>
 
+<!-- MODAL: EDIT / ADD ABSENSI -->
+<div class="modal-overlay" id="modal-edit-absen">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="ea-title">Edit Absensi</div>
+    <div class="modal-sub" id="ea-sub">-</div>
+
+    <div class="field">
+      <label class="lbl">Status</label>
+      <select class="input" id="ea-status" onchange="onEaStatusChange()" style="margin-bottom:0">
+        <option value="masuk">Masuk</option>
+        <option value="lembur">Lembur</option>
+        <option value="libur">Libur</option>
+        <option value="cuti">Cuti</option>
+        <option value="alpha">Alpha</option>
+      </select>
+    </div>
+
+    <div class="field" id="ea-ci-wrap">
+      <label class="lbl">Clock In (HH:MM)</label>
+      <input class="input" type="time" id="ea-ci" style="margin-bottom:0"/>
+    </div>
+
+    <div class="field" id="ea-co-wrap">
+      <label class="lbl">Clock Out (HH:MM)</label>
+      <input class="input" type="time" id="ea-co" style="margin-bottom:0"/>
+    </div>
+
+    <div class="field" id="ea-lembur-wrap">
+      <label class="lbl">Lembur (jam)</label>
+      <input class="input" type="number" id="ea-lembur" min="0" max="12" style="margin-bottom:0"/>
+    </div>
+
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" id="btn-ea-delete" style="background:var(--red);color:white;display:none" onclick="deleteAbsensi()">🗑️ Hapus</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-absen')">Batal</button>
+      <button class="btn btn-green" id="btn-ea-save" onclick="saveEditAbsensi()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1456,38 +1497,198 @@ function hitungInfoGaji(crewRec, stats, insRec){
   };
 }
 
-// Modal detail crew: absensi harian + foto
+// Modal detail crew: absensi harian + foto + EDIT
 function showDetailCrew(key){
   const data = window._rekapDetail[key] || [];
-  if(data.length === 0) return;
   const [outlet, nama] = key.split('|');
   const modal = document.getElementById('modal-detail-crew');
   document.getElementById('dc-title').textContent = nama;
   document.getElementById('dc-sub').textContent = outlet;
 
-  const rowsHtml = data.map(a => {
-    const foto = a.foto_url ? a.foto_url.split(' | ') : [];
-    const fotoBtn = foto.length > 0
-      ? foto.map((url,i) => `<a href="${url}" target="_blank" class="mini-btn" style="background:var(--blue-bg);color:var(--blue);padding:3px 8px;font-size:10px;text-decoration:none;margin-right:2px">📸 ${i===0?'CI':'CO'}</a>`).join('')
-      : '<span style="color:var(--text3);font-size:10px">-</span>';
-    const jamInfo = a.clock_in ? `${a.clock_in} – ${a.clock_out||'...'}` : '—';
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+  // Save key for add/refresh
+  window._dcCurrentKey = key;
+  window._dcCurrentOutlet = outlet;
+  window._dcCurrentNama = nama;
+
+  // Build full kalender: untuk SEMUA tanggal di bulan (termasuk yang kosong)
+  const bulan = window._rekapBulan;
+  const tahun = window._rekapTahun;
+  const daysInMonth = new Date(tahun, bulan, 0).getDate();
+  const hariNama = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+
+  // Build map tanggal -> absensi row
+  const byDay = {};
+  data.forEach(a => {
+    const parts = (a.tanggal||'').split('/');
+    if(parts.length === 3) byDay[parseInt(parts[0])] = a;
+  });
+
+  let html = '';
+  for(let d = 1; d <= daysInMonth; d++){
+    const dt = new Date(tahun, bulan-1, d);
+    const hari = hariNama[dt.getDay()];
+    const dd = String(d).padStart(2,'0');
+    const mm = String(bulan).padStart(2,'0');
+    const tglKey = `${dd}/${mm}/${tahun}`;
+    const a = byDay[d];
+
+    if(!a){
+      // Tanggal kosong — tombol Add
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px">${a.tanggal}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">
-            <span class="badge ${a.status}">${a.status}</span>
-            <span style="margin-left:6px">${jamInfo}</span>
-            ${a.lembur_jam>0?' · Lembur '+a.lembur_jam+'j':''}
+          <div style="font-weight:600;font-size:13px;color:var(--text3)">${d} ${hari}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">—</div>
+        </div>
+        <button class="mini-btn" style="background:var(--green-bg);color:var(--green);font-size:11px" onclick="openEditAbsensi('${tglKey}',null)">➕ Isi</button>
+      </div>`;
+    } else {
+      const foto = a.foto_url ? a.foto_url.split(' | ') : [];
+      const fotoBtn = foto.length > 0
+        ? foto.map((url,i) => `<a href="${url}" target="_blank" class="mini-btn" style="background:var(--blue-bg);color:var(--blue);padding:3px 7px;font-size:10px;text-decoration:none;margin-right:2px">📸${i===0?'CI':'CO'}</a>`).join('')
+        : '';
+      const jamInfo = a.clock_in ? `${a.clock_in} – ${a.clock_out||'...'}` : '—';
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px">${d} ${hari}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">
+              <span class="badge ${a.status}">${a.status}</span>
+              <span style="margin-left:6px">${jamInfo}</span>
+              ${a.lembur_jam>0?' · Lembur '+a.lembur_jam+'j':''}
+            </div>
+          </div>
+          <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            ${fotoBtn ? '<div>'+fotoBtn+'</div>' : ''}
+            <button class="mini-btn" style="background:var(--amber-bg);color:var(--amber);font-size:11px" onclick="openEditAbsensi('${tglKey}',${a.id})">✏️ Edit</button>
           </div>
         </div>
-        <div style="flex-shrink:0">${fotoBtn}</div>
-      </div>
-    </div>`;
-  }).join('');
+      </div>`;
+    }
+  }
 
-  document.getElementById('dc-list').innerHTML = rowsHtml;
+  document.getElementById('dc-list').innerHTML = html;
   modal.classList.add('show');
+}
+
+// ============================================================
+// EDIT/ADD ABSENSI MODAL
+// ============================================================
+function openEditAbsensi(tgl, absensiId){
+  const modal = document.getElementById('modal-edit-absen');
+  document.getElementById('ea-title').textContent = absensiId ? '✏️ Edit Absensi' : '➕ Tambah Absensi';
+  document.getElementById('ea-sub').textContent = `${window._dcCurrentNama} · ${tgl}`;
+
+  // Store
+  window._eaCurrentTgl = tgl;
+  window._eaCurrentId = absensiId;
+  window._eaCurrentNama = window._dcCurrentNama;
+  window._eaCurrentOutlet = window._dcCurrentOutlet;
+
+  // Cari data kalau edit
+  let existing = null;
+  if(absensiId){
+    const data = window._rekapDetail[window._dcCurrentKey] || [];
+    existing = data.find(a => a.id === absensiId);
+  }
+
+  document.getElementById('ea-status').value = existing?.status || 'masuk';
+  document.getElementById('ea-ci').value = existing?.clock_in || '';
+  document.getElementById('ea-co').value = existing?.clock_out || '';
+  document.getElementById('ea-lembur').value = existing?.lembur_jam || 0;
+  document.getElementById('btn-ea-delete').style.display = absensiId ? 'block' : 'none';
+  onEaStatusChange(); // enable/disable fields
+  modal.classList.add('show');
+}
+
+function onEaStatusChange(){
+  const status = document.getElementById('ea-status').value;
+  const needJam = status === 'masuk' || status === 'lembur';
+  const needLembur = status === 'lembur';
+  document.getElementById('ea-ci-wrap').style.display = needJam ? 'block' : 'none';
+  document.getElementById('ea-co-wrap').style.display = needJam ? 'block' : 'none';
+  document.getElementById('ea-lembur-wrap').style.display = needLembur ? 'block' : 'none';
+}
+
+async function saveEditAbsensi(){
+  const btn = document.getElementById('btn-ea-save');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  const status = document.getElementById('ea-status').value;
+  const ci = document.getElementById('ea-ci').value.trim();
+  const co = document.getElementById('ea-co').value.trim();
+  const lembur_jam = parseInt(document.getElementById('ea-lembur').value) || 0;
+
+  // Derive shift from clock_in kalau masuk/lembur
+  let shift = null;
+  if((status === 'masuk' || status === 'lembur') && ci){
+    const parts = ci.split(':');
+    const mnt = parseInt(parts[0])*60 + parseInt(parts[1]||0);
+    shift = mnt < 12*60 ? 'Pagi' : 'Siang';
+  }
+
+  const payload = {
+    status,
+    clock_in: (status === 'masuk' || status === 'lembur') ? (ci||null) : null,
+    clock_out: (status === 'masuk' || status === 'lembur') ? (co||null) : null,
+    lembur_jam: status === 'lembur' ? lembur_jam : 0,
+    shift
+  };
+
+  let ok;
+  if(window._eaCurrentId){
+    // Edit existing
+    ok = await sbUpdate('absensi', payload, 'id=eq.'+window._eaCurrentId);
+  } else {
+    // Insert new
+    payload.tanggal = window._eaCurrentTgl;
+    payload.nama = window._eaCurrentNama;
+    payload.outlet_nama = window._eaCurrentOutlet;
+    payload.outlet_asal = window._eaCurrentOutlet;
+    ok = await sbInsert('absensi', payload);
+  }
+
+  btn.disabled = false; btn.textContent = '💾 Simpan';
+  if(ok){
+    showToast('✅ Tersimpan');
+    closeModal('modal-edit-absen');
+    // Refresh rekap supaya data terbaru masuk
+    await loadRekap();
+    // Re-open detail crew dengan data baru
+    if(window._dcCurrentKey) showDetailCrew(window._dcCurrentKey);
+  } else {
+    showToast('❌ Gagal menyimpan');
+  }
+}
+
+async function deleteAbsensi(){
+  if(!window._eaCurrentId) return;
+  if(!confirm('Hapus absensi ini? Data tidak bisa dikembalikan.')) return;
+
+  const btn = document.getElementById('btn-ea-delete');
+  btn.disabled = true; btn.textContent = 'Menghapus...';
+
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/absensi?id=eq.${window._eaCurrentId}`;
+    const r = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer '+SUPABASE_ANON_KEY
+      }
+    });
+    btn.disabled = false; btn.textContent = '🗑️ Hapus';
+    if(r.ok){
+      showToast('✅ Dihapus');
+      closeModal('modal-edit-absen');
+      await loadRekap();
+      if(window._dcCurrentKey) showDetailCrew(window._dcCurrentKey);
+    } else {
+      showToast('❌ Gagal hapus');
+    }
+  } catch(e){
+    btn.disabled = false; btn.textContent = '🗑️ Hapus';
+    showToast('❌ Error: '+e.message);
+  }
 }
 
 // ============================================================
