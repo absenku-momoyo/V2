@@ -361,6 +361,19 @@ body{min-height:100vh}
       <button id="btn-buka-kamera" class="btn btn-outline" onclick="bukaKamera()" style="margin-bottom:0">📷 Buka Kamera</button>
     </div>
 
+    <div class="field" id="perbantuan-wrap" style="display:none">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text2);padding:8px 10px;background:var(--blue-bg);border-radius:var(--rs);margin-bottom:8px">
+        <input type="checkbox" id="cb-perbantuan" onchange="onPerbantuanToggle()" style="width:16px;height:16px"/>
+        🤝 Sedang perbantuan di outlet lain?
+      </label>
+      <div id="perbantuan-outlet-wrap" style="display:none">
+        <label class="lbl">Outlet Tujuan</label>
+        <select class="input" id="sel-outlet-tujuan" onchange="onOutletTujuanChange()" style="margin-bottom:0">
+          <option value="">Pilih outlet tujuan...</option>
+        </select>
+      </div>
+    </div>
+
     <div class="field">
       <label class="lbl">📍 Lokasi GPS</label>
       <div id="gps-info" class="info-line" style="margin-top:0">Menunggu GPS...</div>
@@ -2670,6 +2683,7 @@ let currentFotoBase64 = '';
 let currentFotoJam = '';
 let _kameraStream = null;
 let _clockSubmitting = false;
+let currentPerbantuanOutlet = null;
 
 // ============================================================
 // CREW TABS
@@ -2717,9 +2731,11 @@ function renderShiftChip(jamOverride){
 // ============================================================
 async function loadTodayAbsen(){
   try {
+    // Query pakai outlet_asal (asli crew) supaya row perbantuan tetap kebawa
+    // Fallback: kalau outlet_asal NULL (data lama), pakai outlet_nama
     const data = await sbGet('absensi',
       'nama=eq.'+encodeURIComponent(user.nama)+
-      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&or=(outlet_asal.eq.'+encodeURIComponent(user.outlet)+',outlet_nama.eq.'+encodeURIComponent(user.outlet)+')'+
       '&tanggal=eq.'+todayStr()+
       '&order=created_at.desc&limit=1');
     crewTodayAbsen = (data && data.length>0) ? data[0] : null;
@@ -2839,6 +2855,7 @@ function openClock(type){
   currentGPSAccuracy = null;
   currentFotoBase64 = '';
   currentFotoJam = '';
+  currentPerbantuanOutlet = null;
   document.getElementById('clock-title').textContent = type==='in' ? '🟢 Clock In' : '🔴 Clock Out';
   document.getElementById('clock-sub').textContent = `${user.nama} · ${user.outlet}`;
   document.getElementById('foto-box').style.display = 'none';
@@ -2847,7 +2864,43 @@ function openClock(type){
   document.getElementById('gps-info').textContent = '📡 Mengambil lokasi GPS...';
   document.getElementById('btn-submit-clock').disabled = true;
   document.getElementById('btn-submit-clock').textContent = type==='in' ? 'Simpan Clock In' : 'Simpan Clock Out';
+
+  // Perbantuan UI: hanya tampil saat Clock In
+  const pWrap = document.getElementById('perbantuan-wrap');
+  const cb = document.getElementById('cb-perbantuan');
+  const selOWrap = document.getElementById('perbantuan-outlet-wrap');
+  const sel = document.getElementById('sel-outlet-tujuan');
+  if(type === 'in'){
+    pWrap.style.display = 'block';
+    cb.checked = false;
+    selOWrap.style.display = 'none';
+    // Populate outlet options (selain outlet asal user)
+    sel.innerHTML = '<option value="">Pilih outlet tujuan...</option>' +
+      OUTLETS.filter(o => o.nama !== user.outlet)
+        .map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
+  } else {
+    pWrap.style.display = 'none';
+  }
+
   document.getElementById('modal-clock').classList.add('show');
+  requestGPS();
+}
+
+function onPerbantuanToggle(){
+  const cb = document.getElementById('cb-perbantuan');
+  document.getElementById('perbantuan-outlet-wrap').style.display = cb.checked ? 'block' : 'none';
+  if(!cb.checked){
+    document.getElementById('sel-outlet-tujuan').value = '';
+    currentPerbantuanOutlet = null;
+  }
+  // Re-validate GPS pakai outlet baru
+  requestGPS();
+}
+
+function onOutletTujuanChange(){
+  const v = document.getElementById('sel-outlet-tujuan').value;
+  currentPerbantuanOutlet = v || null;
+  // Re-validate GPS
   requestGPS();
 }
 
@@ -2868,7 +2921,10 @@ function requestGPS(){
     p => {
       currentGPS = {lat: p.coords.latitude, lng: p.coords.longitude};
       currentGPSAccuracy = p.coords.accuracy;
-      const outlet = OUTLETS.find(o => o.nama === user.outlet);
+
+      // Outlet target: kalau perbantuan, pakai outlet tujuan; kalau tidak, outlet asal user
+      const targetOutletNama = currentPerbantuanOutlet || user.outlet;
+      const outlet = OUTLETS.find(o => o.nama === targetOutletNama);
       const jarak = outlet ? Math.round(jarakMeter(currentGPS.lat, currentGPS.lng, outlet.lat, outlet.lng)) : null;
 
       if(p.coords.accuracy > 150){
@@ -2878,10 +2934,20 @@ function requestGPS(){
         return;
       }
 
+      // Kalau perbantuan dipilih tapi outlet tujuan belum dipilih
+      if(document.getElementById('cb-perbantuan')?.checked && !currentPerbantuanOutlet){
+        document.getElementById('gps-info').innerHTML = `<span style="color:var(--text3)">⚠️ Pilih outlet tujuan dulu</span>`;
+        currentGPS = null;
+        checkClockReady();
+        return;
+      }
+
       const dalam = outlet && jarak <= outlet.radius;
       const col = dalam ? 'var(--green)' : 'var(--red)';
+      const labelOutlet = currentPerbantuanOutlet ? `<b style="color:var(--blue)">→ ${currentPerbantuanOutlet}</b><br>` : '';
       const lbl = dalam ? '✅ Dalam area outlet' : `❌ Di luar area (radius ${outlet?.radius||500}m)`;
       document.getElementById('gps-info').innerHTML = `
+        ${labelOutlet}
         <div style="color:${col};font-weight:700">${lbl}</div>
         <div style="margin-top:4px">Jarak: <b>${jarak}m</b> · Akurasi: ${Math.round(p.coords.accuracy)}m</div>
       `;
@@ -3002,15 +3068,17 @@ async function submitClock(){
   btn.textContent = 'Menyimpan...';
 
   const jam = currentFotoJam || getJam();
-  const outlet = OUTLETS.find(o => o.nama === user.outlet);
+  // Outlet target: kalau perbantuan, pakai outlet tujuan; kalau tidak, outlet asal user
+  const targetOutlet = currentPerbantuanOutlet || user.outlet;
+  const outlet = OUTLETS.find(o => o.nama === targetOutlet);
   const jarak = outlet ? Math.round(jarakMeter(currentGPS.lat, currentGPS.lng, outlet.lat, outlet.lng)) : null;
 
   if(clockType === 'in'){
-    // Re-check duplicate at DB
+    // Re-check duplicate at DB (cek di outlet tujuan, krn unique constraint pakai outlet_nama)
     try {
       const existing = await sbGet('absensi',
         'nama=eq.'+encodeURIComponent(user.nama)+
-        '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+        '&outlet_nama=eq.'+encodeURIComponent(targetOutlet)+
         '&tanggal=eq.'+todayStr());
       if(existing && existing.length > 0){
         showToast('⚠️ Kamu sudah absen hari ini!');
@@ -3022,19 +3090,19 @@ async function submitClock(){
       }
     } catch(e){}
 
-    const shift = getExpectedShift(user.outlet, jam);
+    const shift = getExpectedShift(targetOutlet, jam);
 
-    // Upload foto ke Drive (paralel, tidak block UI lama)
+    // Upload foto ke Drive (pakai outlet tujuan biar terstruktur)
     btn.textContent = 'Upload foto...';
     const fotoUrl = await uploadFotoToDrive(
-      currentFotoBase64, user.nama, user.outlet, todayStr(), 'CI'
+      currentFotoBase64, user.nama, targetOutlet, todayStr(), 'CI'
     );
 
     btn.textContent = 'Menyimpan...';
     const ok = await sbInsert('absensi', {
       tanggal: todayStr(),
       nama: user.nama,
-      outlet_nama: user.outlet,
+      outlet_nama: targetOutlet,
       shift: shift.label,
       clock_in: jam,
       clock_out: null,
@@ -3044,7 +3112,7 @@ async function submitClock(){
       status: 'masuk',
       lembur_jam: 0,
       outlet_asal: user.outlet,
-      perbantuan_ke: null,
+      perbantuan_ke: currentPerbantuanOutlet,
       foto_url: fotoUrl
     });
 
@@ -3052,7 +3120,10 @@ async function submitClock(){
     btn.textContent = 'Simpan';
 
     if(ok){
-      showToast('✅ Clock in berhasil! '+jam);
+      const msg = currentPerbantuanOutlet
+        ? `✅ Clock in perbantuan ke ${currentPerbantuanOutlet}! ${jam}`
+        : `✅ Clock in berhasil! ${jam}`;
+      showToast(msg);
       closeClockModal();
       await loadTodayAbsen();
       await loadRiwayat();
@@ -3062,7 +3133,7 @@ async function submitClock(){
       const jamClockInMnt = toMenit(jam);
       const telat = jamClockInMnt - jamMasukMnt;
       if(telat > 10){
-        notifTelatOwner(user.nama, user.outlet, jam, shift.masuk, telat);
+        notifTelatOwner(user.nama, targetOutlet, jam, shift.masuk, telat);
       }
     } else {
       showToast('❌ Gagal clock in, coba lagi');
@@ -3075,14 +3146,16 @@ async function submitClock(){
       _clockSubmitting = false;
       return;
     }
-    const shift = getExpectedShift(user.outlet, crewTodayAbsen.clock_in);
+    // Outlet tujuan dari row clock in (bisa outlet asal atau perbantuan)
+    const coOutletNama = crewTodayAbsen.outlet_nama;
+    const shift = getExpectedShift(coOutletNama, crewTodayAbsen.clock_in);
     const lj = hitungLemburJam(jam, shift.pulang);
     const statusFinal = lj > 0 ? 'lembur' : 'masuk';
 
     // Upload foto clock out ke Drive
     btn.textContent = 'Upload foto...';
     const fotoUrl = await uploadFotoToDrive(
-      currentFotoBase64, user.nama, user.outlet, todayStr(), 'CO'
+      currentFotoBase64, user.nama, coOutletNama, todayStr(), 'CO'
     );
 
     btn.textContent = 'Menyimpan...';
@@ -3096,7 +3169,7 @@ async function submitClock(){
 
     const ok = await sbUpdate('absensi', updatePayload,
       'nama=eq.'+encodeURIComponent(user.nama)+
-      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&outlet_nama=eq.'+encodeURIComponent(coOutletNama)+
       '&tanggal=eq.'+todayStr());
 
     _clockSubmitting = false;
