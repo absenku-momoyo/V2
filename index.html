@@ -714,11 +714,27 @@ async function sbGet(table, query){
     headers: {
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
-      'Range': '0-9999'  // override default 1000 cap → max 10000 rows
+      'Accept-Profile': 'public'
     }
   });
   if(!r.ok) throw new Error('sbGet '+r.status);
   return await r.json();
+}
+
+// Fetch semua rows dengan pagination (untuk query yang bisa >1000 rows)
+async function sbGetAll(table, query){
+  const pageSize = 1000;
+  let offset = 0;
+  let all = [];
+  while(true){
+    const q = (query ? query+'&' : '') + `limit=${pageSize}&offset=${offset}`;
+    const data = await sbGet(table, q);
+    if(!data || data.length === 0) break;
+    all = all.concat(data);
+    if(data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
 }
 async function sbInsert(table, data){
   const url = `${SUPABASE_URL}/rest/v1/${table}`;
@@ -1352,10 +1368,10 @@ async function loadRekap(){
   result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
 
   // 1) Fetch absensi bulan ini
-  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=50000';
+  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal';
   if(outletFilter) qAbsen = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qAbsen;
   let absensi = [];
-  try { absensi = await sbGet('absensi', qAbsen); } catch(e){ console.error(e); }
+  try { absensi = await sbGetAll('absensi', qAbsen); } catch(e){ console.error(e); }
 
   // 2) Fetch semua crew (untuk data tier, norek, dll)
   let crews = [];
