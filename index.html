@@ -713,7 +713,8 @@ async function sbGet(table, query){
   const r = await fetch(url, {
     headers: {
       'apikey': SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer '+SUPABASE_ANON_KEY
+      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+      'Range': '0-9999'  // override default 1000 cap → max 10000 rows
     }
   });
   if(!r.ok) throw new Error('sbGet '+r.status);
@@ -1351,7 +1352,7 @@ async function loadRekap(){
   result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
 
   // 1) Fetch absensi bulan ini
-  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=10000';
+  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal&limit=50000';
   if(outletFilter) qAbsen = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qAbsen;
   let absensi = [];
   try { absensi = await sbGet('absensi', qAbsen); } catch(e){ console.error(e); }
