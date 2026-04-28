@@ -2260,7 +2260,7 @@ async function doExportSlip(){
     {addr:'E4', text:'Tier 1 (≥2th7bln) · Rp 75.000', tier:'Tier 1'}
   ];
   ws.mergeCells('B4:C4'); // Training wider
-  ws.getCell('B4').value = 'Training (<14 hari) · Rp 45.000';
+  ws.getCell('B4').value = 'Training (≤14 hari) · Rp 45.000';
   ws.getCell('B4').fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR.redBg}};
   ws.getCell('B4').font = {bold:true, color:{argb:COLOR.red}};
   ws.getCell('B4').alignment = {horizontal:'center'};
@@ -3388,7 +3388,7 @@ function hitungTier(tglMasuk, tglKeluar, gajiCustom){
   const hariKerja = Math.floor((now - masuk) / (1000*60*60*24));
 
   // Training: 0-14 hari kalender sejak masuk
-  if(hariKerja < 14) return {tier:'Training', gaji:45000, cls:'tier-training'};
+  if(hariKerja <= 14) return {tier:'Training', gaji:45000, cls:'tier-training'};
 
   // Hitung masa kerja (bulan)
   let y = now.getFullYear()-masuk.getFullYear();
@@ -3406,7 +3406,7 @@ function formatMasaKerja(tglMasuk){
   const masuk = new Date(tglMasuk);
   const now = new Date();
   const days = Math.floor((now - masuk) / (1000*60*60*24));
-  if(days < 14) return `${days} hari (Training)`;
+  if(days <= 14) return `${days} hari (Training)`;
   let y = now.getFullYear()-masuk.getFullYear();
   let m = now.getMonth()-masuk.getMonth();
   if(m<0){ y--; m+=12; }
