@@ -896,7 +896,7 @@ async function onOutletChange(){
     }
     crewSel.innerHTML = '<option value="">Pilih nama kamu...</option>' +
       crews.map(c => {
-        const label = c.nama_panggilan ? `${c.nama} (${c.nama_panggilan})` : c.nama;
+        const label = (c.nama_panggilan && c.nama_panggilan !== c.nama) ? `${c.nama} (${c.nama_panggilan})` : c.nama;
         return `<option value="${c.nama}">${label}</option>`;
       }).join('');
     wrapPass.style.display = 'block';
@@ -1411,11 +1411,14 @@ async function loadRekap(){
   (absensi || []).forEach(a => {
     const outKey = a.outlet_nama;
     if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
-    if(!perOutletCrew[outKey][a.nama]) perOutletCrew[outKey][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    if(!perOutletCrew[outKey][a.nama]) perOutletCrew[outKey][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0,liburNojatah:0};
     const s = perOutletCrew[outKey][a.nama];
     if(a.status==='masuk') s.masuk++;
     else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
-    else if(a.status==='libur') s.libur++;
+    else if(a.status==='libur'){
+      s.libur++;
+      if(a.shift==='nojatah') s.liburNojatah++; // libur tidak dibayar (belum dapat jatah)
+    }
     else if(a.status==='cuti') s.cuti++;
     else if(a.status==='alpha') s.alpha++;
 
@@ -1513,7 +1516,11 @@ async function loadRekap(){
 // Hitung info gaji per crew (untuk slip gaji)
 function hitungInfoGaji(crewRec, stats, insRec){
   const tier = hitungTier(crewRec?.tanggal_masuk, crewRec?.tanggal_keluar, crewRec?.gaji_custom);
-  const terhitung = stats.alpha > 0 ? stats.masuk + stats.cuti : stats.masuk + stats.libur + stats.cuti;
+  // liburNojatah = libur yang belum dapat jatah (crew baru < 1 bulan) → tidak masuk terhitung
+  const liburBayar = (stats.libur || 0) - (stats.liburNojatah || 0);
+  const terhitung = stats.alpha > 0
+    ? stats.masuk + stats.cuti
+    : stats.masuk + liburBayar + stats.cuti;
   const jumlah = tier.gaji * terhitung;
   const lemburRp = stats.lemburJam * 15000;
   const insentif = insRec ? (insRec.insentif || 0) : 0;
@@ -1523,7 +1530,8 @@ function hitungInfoGaji(crewRec, stats, insRec){
     tier: tier.tier,
     gajiPerHari: tier.gaji,
     terhitung, jumlah, lemburRp,
-    insentif, bonus, total
+    insentif, bonus, total,
+    liburNojatah: stats.liburNojatah || 0
   };
 }
 
@@ -2146,11 +2154,14 @@ async function doExportSlip(){
   absensi.forEach(a => {
     const k = a.outlet_nama;
     if(!perOutletCrew[k]) perOutletCrew[k] = {};
-    if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
+    if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0,liburNojatah:0};
     const s = perOutletCrew[k][a.nama];
     if(a.status==='masuk') s.masuk++;
     else if(a.status==='lembur'){ s.masuk++; s.lemburHari++; s.lemburJam += parseInt(a.lembur_jam)||0; }
-    else if(a.status==='libur') s.libur++;
+    else if(a.status==='libur'){
+      s.libur++;
+      if(a.shift==='nojatah') s.liburNojatah++;
+    }
     else if(a.status==='cuti') s.cuti++;
     else if(a.status==='alpha') s.alpha++;
   });
@@ -2938,6 +2949,17 @@ function requestGPS(){
     p => {
       currentGPS = {lat: p.coords.latitude, lng: p.coords.longitude};
       currentGPSAccuracy = p.coords.accuracy;
+
+      // GPS bypass untuk outlet Supervisor
+      if(user.outlet === 'Supervisor' || currentPerbantuanOutlet === 'Supervisor'){
+        currentGPS = {lat: p.coords.latitude, lng: p.coords.longitude};
+        document.getElementById('gps-info').innerHTML = `
+          <div style="color:var(--green);font-weight:700">✅ Supervisor — GPS tidak dibatasi area</div>
+          <div style="margin-top:4px">Akurasi: ${Math.round(p.coords.accuracy)}m</div>
+        `;
+        checkClockReady();
+        return;
+      }
 
       // Outlet target: kalau perbantuan, pakai outlet tujuan; kalau tidak, outlet asal user
       const targetOutletNama = currentPerbantuanOutlet || user.outlet;
