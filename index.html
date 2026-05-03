@@ -2776,15 +2776,17 @@ function toMenit(t){
   const p = t.split(':');
   return parseInt(p[0])*60+parseInt(p[1]);
 }
-function isWeekend(){
+function isWeekend(outletNama){
   const dow = new Date().getDay();
-  return dow===0 || dow===6;
+  // Pasuruan Ice Cream: Sabtu = weekday (08-17), hanya Minggu = weekend (07-16)
+  if(outletNama === 'Momoyo Pasuruan') return dow === 0; // hanya Minggu
+  return dow===0 || dow===6; // outlet lain: Sabtu+Minggu = weekend
 }
 function getExpectedShift(outletNama, jamClockIn, tim){
   const jam = jamClockIn || getJam();
   const isPagi = toMenit(jam) < SHIFT_CUTOFF_MENIT;
   const shiftKey = isPagi ? 'pagi' : 'siang';
-  const dayKey = isWeekend() ? 'weekend' : 'weekday';
+  const dayKey = isWeekend(outletNama) ? 'weekend' : 'weekday';
 
   // Pasuruan: pakai config tim kalau ada
   let cfg;
@@ -3115,7 +3117,7 @@ function requestGPS(){
       const outlet = OUTLETS.find(o => o.nama === targetOutletNama);
       const jarak = outlet ? Math.round(jarakMeter(currentGPS.lat, currentGPS.lng, outlet.lat, outlet.lng)) : null;
 
-      if(p.coords.accuracy > 150){
+      if(p.coords.accuracy > 3000){
         document.getElementById('gps-info').innerHTML = `<span style="color:var(--red)">❌ Akurasi GPS terlalu rendah (${Math.round(p.coords.accuracy)}m). Pindah ke tempat terbuka.</span>`;
         currentGPS = null;
         checkClockReady();
@@ -3250,6 +3252,12 @@ async function submitClock(){
   if(_clockSubmitting) return;
   if(!currentGPS){ showToast('❌ GPS belum siap'); return; }
   if(!currentFotoBase64){ showToast('❌ Foto belum diambil'); return; }
+
+  // Konfirmasi kalau perbantuan
+  if(clockType === 'in' && currentPerbantuanOutlet){
+    const konfirm = confirm(`⚠️ Konfirmasi Perbantuan\n\nKamu akan clock in di:\n📍 ${currentPerbantuanOutlet}\n\nBukan di outlet asalmu (${user.outlet}).\n\nYakin?`);
+    if(!konfirm) return;
+  }
 
   _clockSubmitting = true;
   const btn = document.getElementById('btn-submit-clock');
