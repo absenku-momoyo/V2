@@ -1056,7 +1056,7 @@ async function loadProfil(){
   try {
     const absensi = await sbGet('absensi',
       'nama=eq.'+encodeURIComponent(user.nama)+
-      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&or=(outlet_asal.eq.'+encodeURIComponent(user.outlet)+',outlet_nama.eq.'+encodeURIComponent(user.outlet)+')'+
       '&tanggal=like.*%2F'+bulanStr+'%2F'+tahun+
       '&order=tanggal&limit=200');
     absensi.forEach(a => {
