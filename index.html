@@ -1373,8 +1373,8 @@ async function loadRekap(){
   result.innerHTML = '<div class="card"><div class="empty-state">⏳ Memuat data...</div></div>';
 
   // 1) Fetch absensi bulan ini
-  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_nama,nama,tanggal';
-  if(outletFilter) qAbsen = 'outlet_nama=eq.'+encodeURIComponent(outletFilter)+'&'+qAbsen;
+  let qAbsen = 'tanggal=like.*%2F'+bulanStr+'%2F'+tahun+'&order=outlet_asal,nama,tanggal';
+  if(outletFilter) qAbsen = 'outlet_asal=eq.'+encodeURIComponent(outletFilter)+'&'+qAbsen;
   let absensi = [];
   try { absensi = await sbGetAll('absensi', qAbsen); } catch(e){ console.error(e); }
 
@@ -1410,11 +1410,12 @@ async function loadRekap(){
     return;
   }
 
-  // Group absensi per outlet → crew
+  // Group absensi per outlet_asal → crew
+  // Perbantuan: row di outlet_nama=tujuan, tapi dikelompokkan ke outlet_asal
   const perOutletCrew = {};
   const detailMap = {};
   (absensi || []).forEach(a => {
-    const outKey = a.outlet_nama;
+    const outKey = a.outlet_asal || a.outlet_nama; // fallback ke outlet_nama kalau outlet_asal null
     if(!perOutletCrew[outKey]) perOutletCrew[outKey] = {};
     if(!perOutletCrew[outKey][a.nama]) perOutletCrew[outKey][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0,liburNojatah:0};
     const s = perOutletCrew[outKey][a.nama];
@@ -2247,7 +2248,7 @@ async function doExportSlip(){
   // Stats per outlet|nama
   const perOutletCrew = {};
   absensi.forEach(a => {
-    const k = a.outlet_nama;
+    const k = a.outlet_asal || a.outlet_nama; // group ke outlet asal
     if(!perOutletCrew[k]) perOutletCrew[k] = {};
     if(!perOutletCrew[k][a.nama]) perOutletCrew[k][a.nama] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0,liburNojatah:0};
     const s = perOutletCrew[k][a.nama];
