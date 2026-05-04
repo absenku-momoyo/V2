@@ -2948,7 +2948,10 @@ function updateStatusToday(){
 
   if(a.clock_in && !a.clock_out){
     // Cek apakah boleh clock out (≥ pulang − 30 menit)
-    const shift = getExpectedShift(user.outlet, a.clock_in);
+    // Extract tim dari shift yang tersimpan (format: "Pagi-Bakery" atau "Pagi-Ice Cream")
+    const savedShift = a.shift || '';
+    const coTim = savedShift.includes('Bakery') ? 'Bakery' : savedShift.includes('Ice Cream') ? 'Ice Cream' : null;
+    const shift = getExpectedShift(user.outlet, a.clock_in, coTim);
     const pulangMnt = toMenit(shift.pulang);
     const boleh = nowMnt >= pulangMnt - 30;
     co.disabled = !boleh;
@@ -2960,8 +2963,8 @@ function updateStatusToday(){
     } else {
       co.textContent = '🔴 Clock Out — Saya Pulang';
     }
-    // Update shift chip sesuai clock in actual
-    renderShiftChip(a.clock_in);
+    // Update shift chip sesuai clock in actual + tim
+    renderShiftChip(a.clock_in, coTim);
   } else {
     co.disabled = true;
     co.textContent = '🔴 Clock Out — Selesai';
