@@ -3815,22 +3815,36 @@ async function savePindahOutlet(){
   if(!newOutlet){ showToast('❌ Pilih outlet tujuan'); return; }
 
   const c = currentPindahCrew;
-  if(!confirm(`Pindahkan ${c.nama}?\n\nDari: ${c.outlet_nama}\nKe: ${newOutlet}\n\nAbsensi hari ini dan selanjutnya akan ke outlet baru.`)) return;
+  if(!confirm(`Pindahkan ${c.nama}?\n\nDari: ${c.outlet_nama}\nKe: ${newOutlet}\n\nAbsensi bulan ini dan selanjutnya akan pindah ke outlet baru.`)) return;
 
   const btn = document.getElementById('btn-save-pindah');
   btn.disabled = true; btn.textContent = 'Memindahkan...';
 
+  // 1. Update tabel crew
   const ok = await sbUpdate('crew', {outlet_nama: newOutlet}, 'id=eq.'+c.id);
 
-  btn.disabled = false; btn.textContent = '💾 Pindahkan';
-
   if(ok){
+    // 2. Update outlet_asal absensi bulan ini → outlet baru
+    const now = new Date();
+    const bulanStr = String(now.getMonth()+1).padStart(2,'0');
+    const tahun = now.getFullYear();
+    try {
+      await sbUpdate('absensi',
+        {outlet_asal: newOutlet},
+        'nama=eq.'+encodeURIComponent(c.nama)+
+        '&outlet_asal=eq.'+encodeURIComponent(c.outlet_nama)+
+        '&tanggal=like.*%2F'+bulanStr+'%2F'+tahun
+      );
+    } catch(e){ console.warn('Update absensi outlet_asal gagal:', e); }
+
     closeModal('modal-pindah');
     showToast('✅ '+c.nama+' dipindah ke '+newOutlet);
     await loadCrewList();
   } else {
     showToast('❌ Gagal — mungkin ada nama sama di outlet tujuan');
   }
+
+  btn.disabled = false; btn.textContent = '💾 Pindahkan';
 }
 
 // ============================================================
