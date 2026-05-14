@@ -745,33 +745,53 @@ async function sbGetAll(table, query){
   }
   return all;
 }
-async function sbInsert(table, data){
+async function sbInsert(table, data, retries=3){
   const url = `${SUPABASE_URL}/rest/v1/${table}`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify(data)
-  });
-  return r.ok;
+  for(let i=0; i<retries; i++){
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(data)
+      });
+      if(r.ok) return true;
+      // Conflict (409) = data sudah ada, anggap sukses
+      if(r.status === 409) return true;
+      console.warn(`sbInsert attempt ${i+1} failed: ${r.status}`);
+    } catch(e){
+      console.warn(`sbInsert attempt ${i+1} exception:`, e);
+    }
+    if(i < retries-1) await new Promise(res => setTimeout(res, 1500*(i+1)));
+  }
+  return false;
 }
-async function sbUpdate(table, data, filter){
+async function sbUpdate(table, data, filter, retries=3){
   const url = `${SUPABASE_URL}/rest/v1/${table}?${filter}`;
-  const r = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify(data)
-  });
-  return r.ok;
+  for(let i=0; i<retries; i++){
+    try {
+      const r = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(data)
+      });
+      if(r.ok) return true;
+      console.warn(`sbUpdate attempt ${i+1} failed: ${r.status}`);
+    } catch(e){
+      console.warn(`sbUpdate attempt ${i+1} exception:`, e);
+    }
+    if(i < retries-1) await new Promise(res => setTimeout(res, 1500*(i+1)));
+  }
+  return false;
 }
 
 // Upload foto base64 ke Google Drive via Apps Script
