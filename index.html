@@ -735,8 +735,14 @@ async function sbGetAll(table, query){
   const pageSize = 1000;
   let offset = 0;
   let all = [];
+  // Paginasi limit/offset TANPA ORDER BY tidak dijamin konsisten di Postgres:
+  // antar halaman baris bisa terlewat atau terambil dobel, tanpa error apa pun.
+  // Kalau pemanggil tidak mengirim order sendiri, pakai id.asc sebagai default.
+  // Order dari pemanggil TIDAK ditimpa.
+  const adaOrder = /(^|&)order=/.test(query || '');
+  const qBase = adaOrder ? query : ((query ? query+'&' : '') + 'order=id.asc');
   while(true){
-    const q = (query ? query+'&' : '') + `limit=${pageSize}&offset=${offset}`;
+    const q = (qBase ? qBase+'&' : '') + `limit=${pageSize}&offset=${offset}`;
     const data = await sbGet(table, q);
     if(!data || data.length === 0) break;
     all = all.concat(data);
@@ -2018,7 +2024,10 @@ async function doExportRekap(){
     namaList.forEach(nama => {
       const s = statsByCrew[outlet+'|'+nama];
       const c = crewLookup[outlet+'|'+nama];
-      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom, periodeEnd);
+      // tglKeluar dikirim null — sama seperti di hitungInfoGaji. Crew yang
+      // resign di TENGAH periode tetap ditampilkan dengan tier kerjanya,
+      // supaya label di sini seragam dengan tier yang dibayar di slip gaji.
+      const tier = hitungTier(c?.tanggal_masuk, null, c?.gaji_custom, periodeEnd);
       const total = s.masuk+s.libur+s.cuti+s.alpha;
       const pct = total > 0 ? Math.round((s.masuk/total)*100) : 0;
 
@@ -2364,6 +2373,9 @@ async function doExportSlip(){
 
   const lastDay = new Date(tahun, bulan, 0).getDate();
   const tglGajianStr = `${lastDay} ${bulanNama} ${tahun}`;
+  // Acuan masa kerja = hari terakhir bulan periode, supaya kolom "Masa Kerja"
+  // mencerminkan periode slip ini, bukan hari ini saat file dibuka.
+  const periodeEnd = new Date(tahun, bulan-1, lastDay);
 
   // ===== EXCEL WORKBOOK =====
   const wb = new ExcelJS.Workbook();
@@ -2519,7 +2531,7 @@ async function doExportSlip(){
       const ins = insMap[outlet+'|'+nama];
       const g = hitungInfoGaji(c, s, ins, bulan, tahun);
 
-      const masa = c?.tanggal_masuk ? formatMasaKerjaFull(c.tanggal_masuk) : '-';
+      const masa = c?.tanggal_masuk ? formatMasaKerjaFull(c.tanggal_masuk, periodeEnd) : '-';
       const outletShort = outlet.replace('Momoyo ','').replace('AI-CHA ','');
       const rowData = [
         no++, outletShort, nama,
@@ -3660,14 +3672,17 @@ function hitungTier(tglMasuk, tglKeluar, gajiCustom, tglAcuan){
   return {tier:'Tier 3', gaji:60000, cls:'tier-t3'};
 }
 
-function formatMasaKerja(tglMasuk){
+// tglAcuan = tanggal acuan perhitungan. Default: hari ini (perilaku lama).
+// Dokumen periode (slip gaji, export rekap) kirim hari terakhir bulan periode
+// supaya masa kerja mencerminkan periode itu, bukan saat file dibuka.
+function formatMasaKerja(tglMasuk, tglAcuan){
   if(!tglMasuk) return '-';
   const masuk = new Date(tglMasuk);
-  const now = new Date();
-  const days = Math.floor((now - masuk) / (1000*60*60*24));
+  const acuan = tglAcuan ? new Date(tglAcuan) : new Date();
+  const days = Math.floor((acuan - masuk) / (1000*60*60*24));
   if(days <= 14) return `${days} hari (Training)`;
-  let y = now.getFullYear()-masuk.getFullYear();
-  let m = now.getMonth()-masuk.getMonth();
+  let y = acuan.getFullYear()-masuk.getFullYear();
+  let m = acuan.getMonth()-masuk.getMonth();
   if(m<0){ y--; m+=12; }
   if(y===0) return `${m} bulan`;
   return `${y} thn ${m} bln`;
@@ -3685,9 +3700,10 @@ function formatTglID(tglStr){
 }
 
 // Masa kerja + tanggal join dalam 1 baris
-function formatMasaKerjaFull(tglMasuk){
+// tglAcuan diteruskan ke formatMasaKerja (default: hari ini).
+function formatMasaKerjaFull(tglMasuk, tglAcuan){
   if(!tglMasuk) return '-';
-  return `${formatMasaKerja(tglMasuk)} (sejak ${formatTglID(tglMasuk)})`;
+  return `${formatMasaKerja(tglMasuk, tglAcuan)} (sejak ${formatTglID(tglMasuk)})`;
 }
 
 function tierInfoHTML(tglMasuk, tglKeluar, gajiCustom){
