@@ -858,6 +858,24 @@ async function notifPengajuanOwner(nama, outlet, tipe, tanggal, keterangan){
   }
 }
 
+// Kirim notif "lupa clock out" ke owner via Apps Script → Telegram
+// Non-blocking: kegagalan notif TIDAK boleh membatalkan clock out yang
+// sudah tersimpan di DB. Cukup dicatat di console.
+async function notifLupaClockOutOwner(nama, outlet, jamTekan, jamDicatat, shift){
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'notifLupaClockOut',
+        nama, outlet, jamTekan, jamDicatat, shift
+      })
+    });
+  } catch(e){
+    console.warn('Notif lupa clock out gagal:', e);
+  }
+}
+
 // ============================================================
 // STATE
 // ============================================================
@@ -3474,7 +3492,34 @@ async function submitClock(){
     const savedShift = crewTodayAbsen.shift || '';
     const coTim = savedShift.includes('Bakery') ? 'Bakery' : savedShift.includes('Ice Cream') ? 'Ice Cream' : null;
     const shift = getExpectedShift(coOutletNama, crewTodayAbsen.clock_in, coTim);
-    const lj = hitungLemburJam(jam, shift.pulang);
+
+    // Konfirmasi lembur. Sistem menghitung lembur dari selisih jam clock out
+    // dengan jam pulang shift, jadi crew yang LUPA clock out lalu menekannya
+    // malam hari akan tercatat lembur berjam-jam padahal tidak lembur.
+    // Kalau selisihnya > 60 menit, tanya dulu sebelum menyimpan.
+    // (<= 60 menit tidak ditanya — hitungLemburJam() juga sudah
+    //  mengembalikan 0 di rentang itu, jadi tidak ada yang perlu dikonfirmasi.)
+    let jamCO = jam;                                    // jam yang akan disimpan
+    let lj = hitungLemburJam(jam, shift.pulang);
+    let lupaClockOut = false;
+    const selisihMenit = toMenit(jam) - toMenit(shift.pulang);
+
+    if(selisihMenit > 60){
+      const akuiLembur = confirm(
+        `⏰ Konfirmasi Lembur\n\n`+
+        `Kamu clock out jam ${jam}, sedangkan jam pulangmu ${shift.pulang}.\n`+
+        `Apakah kamu lembur?\n\n`+
+        `[ OK ]     = Ya, saya lembur ${lj} jam\n`+
+        `[ Batal ]  = Tidak, saya lupa clock out`
+      );
+      if(!akuiLembur){
+        // Bukan lembur — catat jam pulang normal shift, bukan jam sekarang.
+        lupaClockOut = true;
+        jamCO = shift.pulang;
+        lj = 0;
+      }
+    }
+
     const statusFinal = lj > 0 ? 'lembur' : 'masuk';
 
     // Upload foto clock out ke Drive
@@ -3485,7 +3530,7 @@ async function submitClock(){
 
     btn.textContent = 'Menyimpan...';
     const updatePayload = {
-      clock_out: jam,
+      clock_out: jamCO,
       status: statusFinal,
       lembur_jam: lj
     };
@@ -3501,7 +3546,20 @@ async function submitClock(){
     btn.textContent = 'Simpan';
 
     if(ok){
-      const msg = lj > 0 ? `✅ Clock out! Lembur ${lj} jam 🕐` : `✅ Clock out berhasil! Pulang ${jam}`;
+      // Lapor ke owner kalau crew mengaku lupa clock out (non-blocking —
+      // kalau notif gagal, clock out tetap tersimpan).
+      if(lupaClockOut){
+        notifLupaClockOutOwner(
+          user.nama,
+          coOutletNama,
+          jam,            // jam sebenarnya menekan tombol
+          jamCO,          // jam yang dicatat sistem (= jam pulang normal)
+          shift.label
+        );
+      }
+      const msg = lupaClockOut
+        ? `✅ Clock out dicatat ${jamCO} (jam pulang normal)`
+        : (lj > 0 ? `✅ Clock out! Lembur ${lj} jam 🕐` : `✅ Clock out berhasil! Pulang ${jamCO}`);
       showToast(msg);
       closeClockModal();
       await loadTodayAbsen();
