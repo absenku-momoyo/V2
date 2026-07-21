@@ -395,6 +395,20 @@ body{min-height:100vh}
   </div>
 </div>
 
+<!-- KONFIRMASI LEMBUR -->
+<!-- data-no-outside-close: harus dijawab lewat salah satu dari 3 tombol,
+     tidak boleh tertutup karena klik di luar area. -->
+<div class="modal-overlay" id="modal-lembur" data-no-outside-close style="z-index:600">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🕐 Konfirmasi Lembur</div>
+    <div id="lembur-pesan" style="font-size:13px;color:var(--text2);line-height:1.7;margin:10px 0 16px">-</div>
+    <button class="btn" id="btn-lembur-ya" onclick="jawabLembur('ya')" style="background:var(--green);color:white;margin-bottom:8px">Ya, saya lembur</button>
+    <button class="btn" id="btn-lembur-tidak" onclick="jawabLembur('tidak')" style="background:var(--amber);color:white;margin-bottom:8px">Tidak, saya lupa clock out</button>
+    <button class="btn btn-outline" onclick="jawabLembur('kembali')">Kembali</button>
+  </div>
+</div>
+
 <!-- OWNER HOME -->
 <div class="screen" id="sc-owner-home">
   <div class="bar">
@@ -3232,6 +3246,58 @@ function closeClockModal(){
 }
 
 // ============================================================
+// MODAL KONFIRMASI LEMBUR
+// Pengganti confirm() bawaan browser: nama tombolnya tidak lagi ikut
+// bahasa HP, dan pilihannya bisa tiga.
+// ============================================================
+let _lemburResolve = null;
+let _lemburPopHandler = null;
+
+// Tahan tombol Back selama modal terbuka, supaya crew memilih secara sadar.
+function pasangPenjagaBack(){
+  try {
+    history.pushState({lemburModal:true}, '');
+    _lemburPopHandler = function(){
+      // Hanya menahan SELAMA modal masih terbuka. Kalau modal sudah tertutup,
+      // handler tidak melakukan apa-apa (dan sudah dilepas juga) — supaya
+      // crew tidak pernah terkunci di halaman.
+      const m = document.getElementById('modal-lembur');
+      if(m && m.classList.contains('show')){
+        history.pushState({lemburModal:true}, '');
+      }
+    };
+    window.addEventListener('popstate', _lemburPopHandler);
+  } catch(e){ /* history API diblokir — abaikan, modal tetap jalan */ }
+}
+
+function lepasPenjagaBack(){
+  if(!_lemburPopHandler) return;
+  window.removeEventListener('popstate', _lemburPopHandler);
+  _lemburPopHandler = null;
+  try {
+    if(history.state && history.state.lemburModal) history.back();
+  } catch(e){}
+}
+
+// Tampilkan modal, kembalikan Promise berisi 'ya' | 'tidak' | 'kembali'.
+function tanyaLembur(jamCO, jamPulang, jamLembur){
+  document.getElementById('lembur-pesan').innerHTML =
+    `Kamu clock out jam <b>${jamCO}</b>, sedangkan jam pulangmu <b>${jamPulang}</b>.<br>Apakah kamu lembur?`;
+  document.getElementById('btn-lembur-ya').textContent = `Ya, saya lembur ${jamLembur} jam`;
+  document.getElementById('modal-lembur').classList.add('show');
+  pasangPenjagaBack();
+  return new Promise(resolve => { _lemburResolve = resolve; });
+}
+
+function jawabLembur(pilihan){
+  document.getElementById('modal-lembur').classList.remove('show');
+  lepasPenjagaBack();
+  const selesai = _lemburResolve;
+  _lemburResolve = null;
+  if(selesai) selesai(pilihan);
+}
+
+// ============================================================
 // GPS
 // ============================================================
 function requestGPS(){
@@ -3505,14 +3571,19 @@ async function submitClock(){
     const selisihMenit = toMenit(jam) - toMenit(shift.pulang);
 
     if(selisihMenit > 60){
-      const akuiLembur = confirm(
-        `⏰ Konfirmasi Lembur\n\n`+
-        `Kamu clock out jam ${jam}, sedangkan jam pulangmu ${shift.pulang}.\n`+
-        `Apakah kamu lembur?\n\n`+
-        `[ OK ]     = Ya, saya lembur ${lj} jam\n`+
-        `[ Batal ]  = Tidak, saya lupa clock out`
-      );
-      if(!akuiLembur){
+      const jawab = await tanyaLembur(jam, shift.pulang, lj);
+
+      if(jawab === 'kembali'){
+        // Batal sepenuhnya — tidak ada yang disimpan. Crew kembali ke Home
+        // dan bisa mengulang clock out nanti.
+        _clockSubmitting = false;
+        btn.disabled = false;
+        btn.textContent = 'Simpan Clock Out';
+        closeClockModal();
+        return;
+      }
+
+      if(jawab === 'tidak'){
         // Bukan lembur — catat jam pulang normal shift, bukan jam sekarang.
         lupaClockOut = true;
         jamCO = shift.pulang;
@@ -4183,6 +4254,9 @@ async function hapusCrew(id, nama){
 // ============================================================
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
+  // Modal ber-atribut data-no-outside-close wajib dijawab lewat tombolnya.
+  // Modal lain tetap bisa ditutup dengan klik di luar area seperti biasa.
+  if(m.hasAttribute('data-no-outside-close')) return;
   m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('show'); });
 });
 
