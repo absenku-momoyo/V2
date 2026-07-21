@@ -834,6 +834,24 @@ async function notifTelatOwner(nama, outlet, jamClockIn, jamMasuk, telatMenit){
   }
 }
 
+// Kirim notif pengajuan izin/cuti ke owner via Apps Script → Telegram
+// Non-blocking: kegagalan notif TIDAK boleh membatalkan pengajuan yang
+// sudah tersimpan di DB. Cukup dicatat di console.
+async function notifPengajuanOwner(nama, outlet, tipe, tanggal, keterangan){
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'notifPengajuan',
+        nama, outlet, tipe, tanggal, keterangan
+      })
+    });
+  } catch(e){
+    console.warn('Notif pengajuan gagal:', e);
+  }
+}
+
 // ============================================================
 // STATE
 // ============================================================
@@ -1208,6 +1226,9 @@ async function ajukanIzin(){
   btn.disabled = false; btn.textContent = '📤 Ajukan';
 
   if(ok){
+    // Notif ke owner — sengaja TIDAK di-await supaya tidak menahan UI.
+    // Pengajuan sudah tersimpan; notif hanya pelengkap.
+    notifPengajuanOwner(user.nama, user.outlet, tipe, tglFmt, ket);
     showToast('✅ Pengajuan terkirim, tunggu persetujuan owner');
     document.getElementById('iz-ket').value = '';
     document.getElementById('iz-tgl').value = '';
@@ -1315,16 +1336,17 @@ async function approveNotif(id){
   if(!n) return;
   if(!confirm(`Setujui pengajuan ${n.nama} (${n.tipe} ${n.tanggal})?`)) return;
 
-  // Update status notif + insert/update absensi sesuai tipe
-  const ok = await sbUpdate('notifikasi', {status:'approved'}, 'id=eq.'+id);
-  if(!ok){ showToast('❌ Gagal update'); return; }
-
-  // Insert row absensi berdasarkan tipe
+  // Status absensi berdasarkan tipe pengajuan
   const absenStatus = n.tipe==='cuti' ? 'cuti' :
                       n.tipe==='izin-sakit' ? 'cuti' :
                       n.tipe==='izin-keperluan' ? 'cuti' : 'masuk';
 
-  // Cek apakah sudah ada absensi di tanggal itu
+  // URUTAN PENTING: tulis absensi DULU, baru update status notifikasi.
+  // Kalau absensi gagal, pengajuan sengaja TIDAK di-approve — supaya tidak
+  // pernah muncul keadaan "approved tapi tidak ada baris absensi", yang
+  // bikin crew tetap kena alpha dan tidak pernah terkoreksi.
+  let absensiOk = false;
+  let pesanGagal = '';
   try {
     const exist = await sbGet('absensi',
       'nama=eq.'+encodeURIComponent(n.nama)+
@@ -1332,19 +1354,48 @@ async function approveNotif(id){
       '&tanggal=eq.'+n.tanggal);
     if(exist && exist.length > 0){
       // Sudah ada, update status saja
-      await sbUpdate('absensi', {status:absenStatus},
+      absensiOk = await sbUpdate('absensi', {status:absenStatus},
         'nama=eq.'+encodeURIComponent(n.nama)+
         '&outlet_nama=eq.'+encodeURIComponent(n.outlet_nama)+
         '&tanggal=eq.'+n.tanggal);
+      if(!absensiOk) pesanGagal = 'gagal mengubah baris absensi yang sudah ada';
     } else {
-      await sbInsert('absensi', {
+      absensiOk = await sbInsert('absensi', {
         tanggal: n.tanggal, nama: n.nama, outlet_nama: n.outlet_nama,
         clock_in: null, clock_out: null,
         status: absenStatus, lembur_jam: 0,
         outlet_asal: n.outlet_nama
       });
+      if(!absensiOk) pesanGagal = 'gagal menambah baris absensi baru';
     }
-  } catch(e){}
+  } catch(e){
+    absensiOk = false;
+    pesanGagal = e.message || String(e);
+  }
+
+  if(!absensiOk){
+    alert('❌ Pengajuan TIDAK jadi disetujui.\n\n'+
+          `Absensi ${n.nama} tanggal ${n.tanggal} ${pesanGagal}.\n\n`+
+          'Status pengajuan sengaja dibiarkan "pending" supaya tidak ada crew '+
+          'yang dianggap sudah cuti tapi tetap kena alpha.\n\n'+
+          'Cek koneksi internet lalu coba setujui lagi.');
+    showToast('❌ Gagal — pengajuan tetap pending');
+    loadNotifList();
+    return;
+  }
+
+  // Absensi sudah aman, baru tandai pengajuannya sebagai approved.
+  const notifOk = await sbUpdate('notifikasi', {status:'approved'}, 'id=eq.'+id);
+  if(!notifOk){
+    alert('⚠️ Absensi sudah tercatat, tapi status pengajuan gagal diperbarui.\n\n'+
+          `Absensi ${n.nama} tanggal ${n.tanggal} SUDAH tersimpan sebagai "${absenStatus}", `+
+          'jadi dia tidak akan kena alpha.\n\n'+
+          'Pengajuan masih terlihat "pending". Silakan setujui lagi — '+
+          'absensinya tidak akan terduplikasi.');
+    showToast('⚠️ Absensi tercatat, status pengajuan gagal');
+    loadNotifList();
+    return;
+  }
 
   showToast('✅ Disetujui, absensi tercatat');
   loadNotifList();
@@ -1553,7 +1604,18 @@ function hitungInfoGaji(crewRec, stats, insRec, bulan, tahun){
     return { tier:'Custom', gajiPerHari:gaji, terhitung, jumlah, lemburRp, insentif, bonus, total: jumlah+lemburRp+insentif+bonus, liburNojatah: stats.liburNojatah||0 };
   }
 
-  if(crewRec?.tanggal_keluar){
+  // Batas periode yang sedang dihitung (BUKAN hari ini).
+  const bln = bulan || (new Date().getMonth()+1);
+  const thn = tahun || new Date().getFullYear();
+  const daysInMonth = new Date(thn, bln, 0).getDate();
+  const bulanStart = new Date(thn, bln-1, 1);
+  const bulanEnd = new Date(thn, bln-1, daysInMonth);
+
+  // Resign PENUH hanya kalau tanggal keluar SEBELUM periode ini dimulai —
+  // artinya crew tidak bekerja satu hari pun di periode ini → gaji 0.
+  // Kalau keluar di TENGAH periode, dia tetap dibayar untuk hari yang sudah
+  // tercatat (terhitung dari stats), pakai tier normal pada akhir periode.
+  if(crewRec?.tanggal_keluar && new Date(crewRec.tanggal_keluar) < bulanStart){
     return { tier:'Resign', gajiPerHari:0, terhitung:0, jumlah:0, lemburRp:0, insentif:0, bonus:0, total:0, liburNojatah:0 };
   }
 
@@ -1570,16 +1632,12 @@ function hitungInfoGaji(crewRec, stats, insRec, bulan, tahun){
   }
 
   const masukDate = new Date(tglMasuk);
-  const bln = bulan || (new Date().getMonth()+1);
-  const thn = tahun || new Date().getFullYear();
-  const daysInMonth = new Date(thn, bln, 0).getDate();
 
   // Hitung gaji split: per tanggal di bulan ini, cek tier-nya
   // Training = hari ke 1-14 sejak masuk, setelah itu ikut tier normal
   // Tapi kita tidak punya data per-tanggal di sini, jadi hitung proporsi:
   // - Berapa hari di bulan ini masih training vs sudah tier normal
-  const bulanStart = new Date(thn, bln-1, 1);
-  const bulanEnd = new Date(thn, bln-1, daysInMonth);
+  // (bulanStart, bulanEnd, daysInMonth sudah dihitung di atas)
 
   // Hari masuk efektif di bulan ini
   const startHitung = masukDate > bulanStart ? masukDate : bulanStart;
@@ -1588,9 +1646,10 @@ function hitungInfoGaji(crewRec, stats, insRec, bulan, tahun){
   const tier3Start = new Date(masukDate);
   tier3Start.setDate(tier3Start.getDate() + 15);
 
-  // Hitung tier saat ini (untuk display)
-  const now = new Date();
-  const tier = hitungTier(tglMasuk, crewRec?.tanggal_keluar, null);
+  // Tier pada AKHIR periode (bukan hari ini). tglKeluar sengaja dikirim null:
+  // status resign penuh sudah ditangani di atas berdasar awal periode. Kalau
+  // crew keluar di tengah periode, di sini kita mau tier kerjanya, bukan Rp0.
+  const tier = hitungTier(tglMasuk, null, null, bulanEnd);
 
   // Hitung gaji split dalam bulan ini
   // Training days: hari di bulan ini yang masih dalam 14 hari pertama
@@ -1873,19 +1932,27 @@ async function doExportRekap(){
   const bulanShort = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][bulan-1];
   const daysInMonth = new Date(tahun, bulan, 0).getDate();
   const hariShort = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  // Acuan tier = hari terakhir bulan periode, supaya tier dihitung sesuai
+  // keadaan pada periode itu (bukan hari ini saat export dibuka).
+  const periodeEnd = new Date(tahun, bulan-1, daysInMonth);
 
   // Build nested map: outlet → nama → tanggal(dd/mm/yyyy) → absensi
+  // Kelompokkan pakai outlet_asal (outlet tempat crew terdaftar), BUKAN
+  // outlet_nama (outlet tempat dia absen hari itu). Konsisten dengan
+  // loadRekap() dan doExportSlip(): kalau crew pindah outlet, rekap &
+  // gajinya ikut pindah ke outlet baru.
   const byOutlet = {};
   absensi.forEach(a => {
-    if(!byOutlet[a.outlet_nama]) byOutlet[a.outlet_nama] = {};
-    if(!byOutlet[a.outlet_nama][a.nama]) byOutlet[a.outlet_nama][a.nama] = {};
-    byOutlet[a.outlet_nama][a.nama][a.tanggal] = a;
+    const outKey = a.outlet_asal || a.outlet_nama;
+    if(!byOutlet[outKey]) byOutlet[outKey] = {};
+    if(!byOutlet[outKey][a.nama]) byOutlet[outKey][a.nama] = {};
+    byOutlet[outKey][a.nama][a.tanggal] = a;
   });
 
-  // Stats per crew
+  // Stats per crew — kunci harus sama dengan byOutlet di atas
   const statsByCrew = {};
   absensi.forEach(a => {
-    const k = a.outlet_nama+'|'+a.nama;
+    const k = (a.outlet_asal || a.outlet_nama)+'|'+a.nama;
     if(!statsByCrew[k]) statsByCrew[k] = {masuk:0,libur:0,cuti:0,alpha:0,lemburHari:0,lemburJam:0};
     const s = statsByCrew[k];
     if(a.status==='masuk') s.masuk++;
@@ -1951,7 +2018,7 @@ async function doExportRekap(){
     namaList.forEach(nama => {
       const s = statsByCrew[outlet+'|'+nama];
       const c = crewLookup[outlet+'|'+nama];
-      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom);
+      const tier = hitungTier(c?.tanggal_masuk, c?.tanggal_keluar, c?.gaji_custom, periodeEnd);
       const total = s.masuk+s.libur+s.cuti+s.alpha;
       const pct = total > 0 ? Math.round((s.masuk/total)*100) : 0;
 
@@ -3562,22 +3629,29 @@ async function renderAturOutletList(){
 // ============================================================
 // TIER CALCULATION
 // ============================================================
-function hitungTier(tglMasuk, tglKeluar, gajiCustom){
+function hitungTier(tglMasuk, tglKeluar, gajiCustom, tglAcuan){
   // Return: {tier, gaji, warna_class}
-  if(tglKeluar) return {tier:'Resign', gaji:0, cls:'tier-resign'};
+  // tglAcuan = tanggal acuan perhitungan. Default: hari ini (perilaku lama).
+  // Untuk slip/rekap periode lampau, kirim hari terakhir bulan periode supaya
+  // tier & status resign dihitung sesuai keadaan pada periode itu, bukan
+  // sesuai kapan file dibuka.
+  const acuan = tglAcuan ? new Date(tglAcuan) : new Date();
+
+  // Resign HANYA kalau tanggal keluar sudah lewat pada tanggal acuan.
+  // Kalau crew masih bekerja pada tanggal acuan, hitung tier normalnya.
+  if(tglKeluar && new Date(tglKeluar) < acuan) return {tier:'Resign', gaji:0, cls:'tier-resign'};
   if(gajiCustom) return {tier:'Custom', gaji:parseInt(gajiCustom), cls:'tier-custom'};
   if(!tglMasuk) return {tier:'Tier 3', gaji:60000, cls:'tier-t3'};
 
   const masuk = new Date(tglMasuk);
-  const now = new Date();
-  const hariKerja = Math.floor((now - masuk) / (1000*60*60*24));
+  const hariKerja = Math.floor((acuan - masuk) / (1000*60*60*24));
 
   // Training: 0-14 hari kalender sejak masuk
   if(hariKerja <= 14) return {tier:'Training', gaji:45000, cls:'tier-training'};
 
   // Hitung masa kerja (bulan)
-  let y = now.getFullYear()-masuk.getFullYear();
-  let m = now.getMonth()-masuk.getMonth();
+  let y = acuan.getFullYear()-masuk.getFullYear();
+  let m = acuan.getMonth()-masuk.getMonth();
   if(m<0){ y--; m+=12; }
   const masaBulan = y*12 + m;
 
