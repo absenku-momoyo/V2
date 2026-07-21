@@ -801,6 +801,27 @@ async function sbGetAll(table, query){
   }
   return all;
 }
+// Panggil fungsi Postgres (RPC) lewat POST.
+// Dipakai untuk verifikasi password: pencocokan dikerjakan di server oleh
+// fungsi SECURITY DEFINER, jadi kolom password tidak pernah perlu dibaca
+// browser — dan memang hak bacanya sudah dicabut dari anon.
+// Melempar Error kalau status bukan 2xx, TypeError kalau fetch gagal total,
+// supaya pesanGagalKoneksi() bisa membedakan keduanya.
+async function sbRpc(fn, params){
+  const url = `${SUPABASE_URL}/rest/v1/rpc/${fn}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer '+SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(params || {})
+  });
+  if(!r.ok) throw new Error('sbRpc '+fn+' '+r.status);
+  return await r.json();
+}
+
 async function sbInsert(table, data, retries=3){
   const url = `${SUPABASE_URL}/rest/v1/${table}`;
   for(let i=0; i<retries; i++){
@@ -974,10 +995,10 @@ function setRole(r){
 async function loadOutlets(){
   const sel = document.getElementById('li-outlet');
   try {
-    // JANGAN pernah menyertakan kolom password di sini. Daftar outlet dimuat
-    // di halaman login (sebelum siapa pun terverifikasi), jadi apa pun yang
-    // diminta di query ini bisa dibaca lewat F12 -> Network oleh siapa saja.
-    // Verifikasi password dilakukan di server, lihat loginCrew().
+    // JANGAN meminta kolom password di sini. Hak bacanya sudah dicabut dari
+    // anon di Supabase — memintanya membuat query ditolak (42501) dan daftar
+    // outlet gagal dimuat, sehingga login mati total sebelum crew mengetik
+    // apa pun. Verifikasi password lewat RPC, lihat loginCrew().
     const data = await sbGet('outlets', 'select=id,nama,lat,lng,radius&order=id');
     OUTLETS = data;
     sel.innerHTML = '<option value="">Pilih outlet...</option>' +
@@ -1048,14 +1069,22 @@ async function loginCrew(){
   try {
     const outletData = OUTLETS.find(o => o.nama === outletNama);
     if(!outletData){ showErr('Outlet tidak ditemukan'); btn.disabled=false; btn.textContent='Masuk'; return; }
-
-    // Password dicocokkan DI SERVER. Yang diminta balik hanya kolom nama,
-    // jadi password outlet tidak pernah ikut terkirim ke browser.
-    // Array kosong = tidak ada baris yang cocok = password salah.
-    const cocok = await sbGet('outlets',
-      'select=nama&nama=eq.'+encodeURIComponent(outletNama)+
-      '&password=eq.'+encodeURIComponent(pass));
-    if(!cocok || cocok.length === 0){
+    // Password dicocokkan di server lewat fungsi SECURITY DEFINER.
+    // Gangguan jaringan/server SENGAJA dibedakan dari password salah, supaya
+    // crew tidak mengira passwordnya keliru padahal sinyalnya yang bermasalah.
+    let passOk;
+    try {
+      passOk = await sbRpc('cek_password_outlet', {
+        p_nama: outletNama,
+        p_password: pass
+      });
+    } catch(e){
+      showErr('❌ '+pesanGagalKoneksi(e));
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+      return;
+    }
+    if(passOk !== true){
       showErr('❌ Password salah!');
       btn.disabled = false;
       btn.textContent = 'Masuk';
@@ -4119,12 +4148,17 @@ async function loginOwner(){
   if(!pass){ showErr('Isi password owner'); return; }
 
   try {
-    // Password dicocokkan DI SERVER. Yang diminta balik hanya kolom id,
-    // jadi password owner tidak pernah dikirim ke browser.
-    // Array kosong = password salah (atau baris config-nya belum ada).
-    const cocok = await sbGet('owner_config',
-      'select=id&id=eq.1&password=eq.'+encodeURIComponent(pass));
-    if(!cocok || cocok.length === 0){
+    // Password dicocokkan di server lewat fungsi SECURITY DEFINER.
+    // Tabel owner_config sudah tidak boleh dibaca anon (42501), jadi
+    // jangan query tabelnya langsung.
+    let passOk;
+    try {
+      passOk = await sbRpc('cek_password_owner', { p_password: pass });
+    } catch(e){
+      showErr('❌ '+pesanGagalKoneksi(e));
+      return;
+    }
+    if(passOk !== true){
       showErr('❌ Password owner salah!');
       return;
     }
