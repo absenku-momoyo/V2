@@ -237,6 +237,9 @@ body{min-height:100vh}
       <div id="shift-chip-area" style="margin-top:10px"></div>
     </div>
 
+    <!-- Peringatan alpha 3 hari terakhir — diisi loadAlphaKoreksi() -->
+    <div id="alpha-warning" style="display:none"></div>
+
     <div class="card">
       <div class="card-lbl">📍 Status Hari Ini</div>
       <div id="status-today" style="font-size:13px;color:var(--text2);padding:8px 0">Memuat...</div>
@@ -406,6 +409,39 @@ body{min-height:100vh}
     <button class="btn" id="btn-lembur-ya" onclick="jawabLembur('ya')" style="background:var(--green);color:white;margin-bottom:8px">Ya, saya lembur</button>
     <button class="btn" id="btn-lembur-tidak" onclick="jawabLembur('tidak')" style="background:var(--amber);color:white;margin-bottom:8px">Tidak, saya lupa clock out</button>
     <button class="btn btn-outline" onclick="jawabLembur('kembali')">Kembali</button>
+  </div>
+</div>
+
+<!-- AJUKAN KOREKSI ALPHA -->
+<div class="modal-overlay" id="modal-koreksi">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📝 Ajukan Koreksi Alpha</div>
+    <div class="modal-sub">Perlu persetujuan owner. Status tidak berubah otomatis.</div>
+
+    <div class="field">
+      <label class="lbl">Tanggal</label>
+      <div class="input" id="kor-tgl" style="margin-bottom:0;background:var(--surface2);color:var(--text2)">-</div>
+    </div>
+    <div class="field">
+      <label class="lbl">Seharusnya</label>
+      <select class="input" id="kor-target" style="margin-bottom:0">
+        <option value="libur">Libur</option>
+        <option value="cuti">Cuti</option>
+        <option value="izin-sakit">Izin Sakit</option>
+        <option value="izin-keperluan">Izin Keperluan</option>
+        <option value="masuk">Sebenarnya saya masuk</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="lbl">Keterangan (minimal 10 karakter)</label>
+      <textarea class="input" id="kor-ket" rows="3" placeholder="Jelaskan kenapa hari itu tidak absen..." style="margin-bottom:0;resize:vertical;font-family:inherit"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="closeModal('modal-koreksi')">Batal</button>
+      <button class="btn btn-brand" id="btn-kirim-koreksi" onclick="kirimKoreksi()">📤 Kirim Pengajuan</button>
+    </div>
   </div>
 </div>
 
@@ -1292,7 +1328,7 @@ async function loadIzinRiwayat(){
       const statusBadge = n.status==='approved' ? '<span style="color:var(--green);font-weight:700">✅ Disetujui</span>'
         : n.status==='rejected' ? '<span style="color:var(--red);font-weight:700">❌ Ditolak</span>'
         : '<span style="color:var(--amber);font-weight:700">⏳ Pending</span>';
-      const tipeNama = {cuti:'Cuti','izin-sakit':'Izin Sakit','izin-keperluan':'Izin Keperluan'}[n.tipe] || n.tipe;
+      const tipeNama = labelTipeNotif(n.tipe);
       return `
         <div style="padding:8px 0;border-bottom:1px solid var(--border)">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -1348,7 +1384,16 @@ function renderNotifList(){
   }
 
   el.innerHTML = filtered.map(n => {
-    const tipeNama = {cuti:'Cuti','izin-sakit':'Izin Sakit','izin-keperluan':'Izin Keperluan','lupa-clockout':'Lupa Clock Out'}[n.tipe] || n.tipe;
+    const tipeNama = labelTipeNotif(n.tipe);
+    // Koreksi alpha diberi penanda supaya owner tidak menyangka ini
+    // pengajuan baru — barisnya sudah ada dan status lamanya alpha.
+    const tKoreksi = targetKoreksiDari(n.tipe);
+    const badgeKoreksi = tKoreksi
+      ? '<div style="display:inline-block;background:var(--red);color:white;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:.5px;margin-bottom:4px">KOREKSI ALPHA</div>'
+      : '';
+    const detailKoreksi = tKoreksi
+      ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">Status: <b style="color:var(--red)">alpha</b> → <b style="color:var(--green)">${tKoreksi.status}</b></div>`
+      : '';
     const actions = n.status==='pending' ? `
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="mini-btn" style="background:var(--green);color:white;flex:1" onclick="approveNotif(${n.id})">✅ Setujui</button>
@@ -1359,8 +1404,10 @@ function renderNotifList(){
       <div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
+            ${badgeKoreksi}
             <div style="font-weight:600">${n.nama} <span style="color:var(--text3);font-weight:400">· ${n.outlet_nama.replace('Momoyo ','').replace('AI-CHA ','')}</span></div>
             <div style="font-size:12px;color:var(--text2);margin-top:2px"><b>${tipeNama}</b> · ${n.tanggal}</div>
+            ${detailKoreksi}
             <div style="font-size:11px;color:var(--text3);margin-top:2px">${n.keterangan||''}</div>
           </div>
         </div>
@@ -1374,10 +1421,19 @@ async function approveNotif(id){
   if(!n) return;
   if(!confirm(`Setujui pengajuan ${n.nama} (${n.tipe} ${n.tanggal})?`)) return;
 
+  // Koreksi alpha: barisnya SUDAH ADA dan berstatus alpha, jadi hanya
+  // di-update. Pengajuan biasa tetap memakai jalur lama (update-atau-insert).
+  const tKoreksi = targetKoreksiDari(n.tipe);
+  if(String(n.tipe||'').startsWith(KOREKSI_PREFIX) && !tKoreksi){
+    alert('❌ Tipe koreksi tidak dikenal: '+n.tipe+'\n\nPengajuan tidak diproses.');
+    return;
+  }
+
   // Status absensi berdasarkan tipe pengajuan
-  const absenStatus = n.tipe==='cuti' ? 'cuti' :
-                      n.tipe==='izin-sakit' ? 'cuti' :
-                      n.tipe==='izin-keperluan' ? 'cuti' : 'masuk';
+  const absenStatus = tKoreksi ? tKoreksi.status :
+                      (n.tipe==='cuti' ? 'cuti' :
+                       n.tipe==='izin-sakit' ? 'cuti' :
+                       n.tipe==='izin-keperluan' ? 'cuti' : 'masuk');
 
   // URUTAN PENTING: tulis absensi DULU, baru update status notifikasi.
   // Kalau absensi gagal, pengajuan sengaja TIDAK di-approve — supaya tidak
@@ -1390,7 +1446,19 @@ async function approveNotif(id){
       'nama=eq.'+encodeURIComponent(n.nama)+
       '&outlet_nama=eq.'+encodeURIComponent(n.outlet_nama)+
       '&tanggal=eq.'+n.tanggal);
-    if(exist && exist.length > 0){
+    if(tKoreksi){
+      // KOREKSI ALPHA — hanya UPDATE baris yang masih alpha, jangan pernah
+      // INSERT. Kalau barisnya sudah tidak alpha, jangan ditimpa: kemungkinan
+      // owner sudah membetulkannya lebih dulu lewat panel Edit Absensi.
+      const barisAlpha = (exist || []).find(r => r.status === 'alpha');
+      if(!barisAlpha){
+        absensiOk = false;
+        pesanGagal = 'sudah tidak berstatus alpha (kemungkinan sudah dibetulkan lebih dulu), jadi tidak ditimpa';
+      } else {
+        absensiOk = await sbUpdate('absensi', {status:absenStatus}, 'id=eq.'+barisAlpha.id);
+        if(!absensiOk) pesanGagal = 'gagal mengubah status baris alpha';
+      }
+    } else if(exist && exist.length > 0){
       // Sudah ada, update status saja
       absensiOk = await sbUpdate('absensi', {status:absenStatus},
         'nama=eq.'+encodeURIComponent(n.nama)+
@@ -2979,6 +3047,7 @@ function crewTab(t){
   });
   if(t==='profil') loadProfil();
   if(t==='izin') loadIzinRiwayat();
+  if(t==='home') loadAlphaKoreksi();
 }
 
 // ============================================================
@@ -3684,6 +3753,246 @@ function pesanGagalKoneksi(err){
     return 'Tidak ada koneksi internet. Cek sinyal atau WiFi, lalu coba lagi.';
   }
   return 'Gagal menghubungi server. Coba lagi beberapa saat.';
+}
+
+// ============================================================
+// KOREKSI ALPHA
+// Memakai tabel `notifikasi` dan alur approval yang SAMA dengan ajukanIzin()
+// / approveNotif() — tidak ada mekanisme baru.
+// tipe disimpan sebagai 'koreksi-<target>' supaya satu kolom cukup:
+// prefix menandai ini koreksi, sisanya = status yang diminta crew.
+// ============================================================
+const KOREKSI_PREFIX = 'koreksi-';
+const BATAS_HARI_KOREKSI = 3;
+
+// target koreksi -> label tampilan + status yang akan ditulis ke absensi.
+// izin-sakit & izin-keperluan sengaja dipetakan ke 'cuti', mengikuti
+// pemetaan yang sudah dipakai approveNotif untuk pengajuan biasa.
+const TARGET_KOREKSI = {
+  'libur':          { label: 'Libur',          status: 'libur' },
+  'cuti':           { label: 'Cuti',           status: 'cuti'  },
+  'izin-sakit':     { label: 'Izin Sakit',     status: 'cuti'  },
+  'izin-keperluan': { label: 'Izin Keperluan', status: 'cuti'  },
+  'masuk':          { label: 'Masuk',          status: 'masuk' }
+};
+
+function targetKoreksiDari(tipe){
+  const t = String(tipe || '');
+  if(!t.startsWith(KOREKSI_PREFIX)) return null;
+  return TARGET_KOREKSI[t.slice(KOREKSI_PREFIX.length)] || null;
+}
+
+// Label tipe notifikasi, dipakai bersama oleh daftar crew & owner.
+function labelTipeNotif(tipe){
+  const dasar = {cuti:'Cuti','izin-sakit':'Izin Sakit','izin-keperluan':'Izin Keperluan','lupa-clockout':'Lupa Clock Out'};
+  if(String(tipe || '').startsWith(KOREKSI_PREFIX)){
+    const t = targetKoreksiDari(tipe);
+    return 'Koreksi Alpha → ' + (t ? t.label : tipe);
+  }
+  return dasar[tipe] || tipe;
+}
+
+// Parse "DD/MM/YYYY" -> Date lokal. null kalau bukan format itu.
+// absensi.tanggal bertipe TEXT, jadi semua perbandingan tanggal HARUS
+// lewat sini — jangan pernah membandingkan string-nya langsung.
+function parseTglID(s){
+  const p = String(s || '').split('/');
+  if(p.length !== 3) return null;
+  const d = new Date(+p[2], +p[1]-1, +p[0]);
+  return isNaN(d) ? null : d;
+}
+
+// N tanggal "DD/MM/YYYY" ke belakang, TIDAK termasuk hari ini.
+function tanggalNHariLalu(n){
+  const out = [];
+  const now = new Date();
+  for(let i = 1; i <= n; i++){
+    const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    out.push(`${String(x.getDate()).padStart(2,'0')}/${String(x.getMonth()+1).padStart(2,'0')}/${x.getFullYear()}`);
+  }
+  return out;
+}
+
+// Kartu peringatan alpha di halaman Home.
+async function loadAlphaKoreksi(){
+  const box = document.getElementById('alpha-warning');
+  if(!box || !user || user.role !== 'crew') return;
+
+  const tglCek = tanggalNHariLalu(BATAS_HARI_KOREKSI);
+  const daftar = tglCek.map(t => '"'+t+'"').join(',');
+
+  let alphaRows = [], pendingRows = [];
+  try {
+    alphaRows = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&status=eq.alpha'+
+      '&tanggal=in.('+daftar+')') || [];
+    pendingRows = await sbGet('notifikasi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&status=eq.pending'+
+      '&tanggal=in.('+daftar+')') || [];
+  } catch(e){
+    // Query gagal tidak boleh mengganggu halaman Home — sembunyikan saja.
+    console.warn('Load alpha koreksi gagal:', e);
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  if(alphaRows.length === 0){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  const adaPending = {};
+  pendingRows.forEach(n => {
+    if(String(n.tipe || '').startsWith(KOREKSI_PREFIX)) adaPending[n.tanggal] = true;
+  });
+
+  // Urutkan dari tanggal terbaru — pakai Date, bukan urutan string.
+  alphaRows.sort((a,b) => (parseTglID(b.tanggal) || 0) - (parseTglID(a.tanggal) || 0));
+
+  let html = '<div class="card" style="border-color:var(--red);background:var(--red-bg)">'+
+             '<div class="card-lbl" style="color:var(--red)">⚠️ Kamu tercatat Alpha</div>';
+  alphaRows.forEach(a => {
+    const d = parseTglID(a.tanggal);
+    const hari = d ? HARI_NAMA[d.getDay()]+', ' : '';
+    const aksi = adaPending[a.tanggal]
+      ? '<span style="font-size:11px;color:var(--amber);font-weight:700">⏳ Menunggu owner</span>'
+      : `<button class="mini-btn" style="background:var(--red);color:white" onclick="bukaModalKoreksi('${a.tanggal}')">Ajukan Koreksi</button>`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(220,38,38,.25)">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${hari}${a.tanggal}</div>
+        <div style="flex-shrink:0">${aksi}</div>
+      </div>`;
+  });
+  html += '</div>';
+
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+
+let _korTanggal = null;
+
+function bukaModalKoreksi(tanggal){
+  const d = parseTglID(tanggal);
+  _korTanggal = tanggal;
+  document.getElementById('kor-tgl').textContent = (d ? HARI_NAMA[d.getDay()]+', ' : '') + tanggal;
+  document.getElementById('kor-target').value = 'libur';
+  document.getElementById('kor-ket').value = '';
+  document.getElementById('modal-koreksi').classList.add('show');
+}
+
+async function kirimKoreksi(){
+  const tanggal = _korTanggal;
+  const target = document.getElementById('kor-target').value;
+  const ket = document.getElementById('kor-ket').value.trim();
+  const btn = document.getElementById('btn-kirim-koreksi');
+  const pulihkanBtn = () => { btn.disabled = false; btn.textContent = '📤 Kirim Pengajuan'; };
+
+  if(!tanggal){ showToast('❌ Tanggal tidak ditemukan'); return; }
+  const info = TARGET_KOREKSI[target];
+  if(!info){ showToast('❌ Pilihan koreksi tidak dikenal'); return; }
+  if(ket.length < 10){
+    alert('❌ Keterangan wajib minimal 10 karakter.\n\nSekarang baru '+ket.length+' karakter.');
+    return;
+  }
+  const tglAlpha = parseTglID(tanggal);
+  if(!tglAlpha){ showToast('❌ Format tanggal tidak valid'); return; }
+
+  btn.disabled = true; btn.textContent = 'Memeriksa...';
+
+  try {
+    // --- VALIDASI 1: sudah ada pengajuan koreksi PENDING untuk tanggal ini ---
+    const pend = await sbGet('notifikasi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&status=eq.pending'+
+      '&tanggal=eq.'+encodeURIComponent(tanggal));
+    if((pend || []).some(n => String(n.tipe || '').startsWith(KOREKSI_PREFIX))){
+      pulihkanBtn();
+      alert('❌ Pengajuan untuk tanggal ini sudah dikirim, tunggu persetujuan owner.');
+      return;
+    }
+
+    // Barisnya harus MASIH alpha — kalau owner sudah membetulkan duluan,
+    // pengajuan ini justru berbahaya (bisa menimpa status yang sudah benar).
+    const rows = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&tanggal=eq.'+encodeURIComponent(tanggal));
+    if(!(rows || []).some(r => r.status === 'alpha')){
+      pulihkanBtn();
+      closeModal('modal-koreksi');
+      alert('❌ Tanggal ini sudah tidak berstatus Alpha.\n\nKemungkinan owner sudah membetulkannya.');
+      loadAlphaKoreksi();
+      return;
+    }
+
+    if(target === 'libur'){
+      // --- VALIDASI 2: masa training, diukur pada TANGGAL ALPHA ---
+      // Acuannya sengaja tanggal alpha (bukan hari ini): jatah libur dinilai
+      // menurut keadaan crew saat hari itu berlangsung.
+      const c = await sbGet('crew',
+        'nama=eq.'+encodeURIComponent(user.nama)+
+        '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+        '&limit=1');
+      const crewData = (c && c.length > 0) ? c[0] : null;
+      if(crewData && crewData.tanggal_masuk){
+        const masuk = new Date(crewData.tanggal_masuk);
+        const hariKerja = Math.floor((tglAlpha - masuk) / (1000*60*60*24));
+        if(hariKerja <= 14){
+          pulihkanBtn();
+          alert('❌ Belum dapat jatah libur pada tanggal itu.\n\nSaat itu kamu masih dalam masa training 14 hari.');
+          return;
+        }
+      }
+
+      // --- VALIDASI 3: maksimal 1x libur per minggu (Senin s/d Minggu) ---
+      // Logika sama persis dengan ambilLibur(), hanya acuannya TANGGAL ALPHA
+      // supaya yang dicek minggu tanggal itu, bukan minggu berjalan.
+      const daftarMinggu = tanggalMingguIni(tglAlpha).map(t => '"'+t+'"').join(',');
+      const liburMinggu = await sbGet('absensi',
+        'nama=eq.'+encodeURIComponent(user.nama)+
+        '&status=eq.libur'+
+        '&tanggal=in.('+daftarMinggu+')');
+      if(liburMinggu && liburMinggu.length > 0){
+        const t = liburMinggu[0].tanggal || '';
+        const dt = parseTglID(t);
+        pulihkanBtn();
+        alert(`❌ Minggu itu kamu sudah punya libur (${dt ? HARI_NAMA[dt.getDay()]+' '+t : t}).\n\nJatah libur 1x per minggu.`);
+        return;
+      }
+    }
+
+    // TODO: kalau target === 'cuti', cek kuota cuti di sini setelah fitur
+    // total/kuota cuti selesai dibuat. Untuk sekarang sengaja diloloskan.
+
+  } catch(e){
+    pulihkanBtn();
+    alert('❌ Gagal memeriksa pengajuan.\n\n'+pesanGagalKoneksi(e));
+    return;
+  }
+
+  // --- Simpan pengajuan (bentuk baris SAMA dengan ajukanIzin) ---
+  btn.textContent = 'Mengirim...';
+  const ok = await sbInsert('notifikasi', {
+    tipe: KOREKSI_PREFIX + target,
+    nama: user.nama, outlet_nama: user.outlet,
+    tanggal, keterangan: ket, status: 'pending'
+  });
+  pulihkanBtn();
+
+  if(ok){
+    // Notif ke owner — non-blocking, sama seperti ajukanIzin.
+    // Keterangan diperkaya arah koreksinya supaya owner paham dari notifikasi.
+    notifPengajuanOwner(user.nama, user.outlet, 'koreksi_alpha', tanggal,
+      `[Alpha → ${info.label}] ${ket}`);
+    closeModal('modal-koreksi');
+    showToast('✅ Pengajuan koreksi terkirim, tunggu persetujuan owner');
+    loadAlphaKoreksi();
+    loadIzinRiwayat();
+  } else {
+    showToast('❌ Gagal mengirim');
+  }
 }
 
 async function ambilLibur(){
