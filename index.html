@@ -974,7 +974,11 @@ function setRole(r){
 async function loadOutlets(){
   const sel = document.getElementById('li-outlet');
   try {
-    const data = await sbGet('outlets', 'select=id,nama,lat,lng,radius,password&order=id');
+    // JANGAN pernah menyertakan kolom password di sini. Daftar outlet dimuat
+    // di halaman login (sebelum siapa pun terverifikasi), jadi apa pun yang
+    // diminta di query ini bisa dibaca lewat F12 -> Network oleh siapa saja.
+    // Verifikasi password dilakukan di server, lihat loginCrew().
+    const data = await sbGet('outlets', 'select=id,nama,lat,lng,radius&order=id');
     OUTLETS = data;
     sel.innerHTML = '<option value="">Pilih outlet...</option>' +
       data.map(o => `<option value="${o.nama}">${o.nama}</option>`).join('');
@@ -1044,7 +1048,14 @@ async function loginCrew(){
   try {
     const outletData = OUTLETS.find(o => o.nama === outletNama);
     if(!outletData){ showErr('Outlet tidak ditemukan'); btn.disabled=false; btn.textContent='Masuk'; return; }
-    if(outletData.password !== pass){
+
+    // Password dicocokkan DI SERVER. Yang diminta balik hanya kolom nama,
+    // jadi password outlet tidak pernah ikut terkirim ke browser.
+    // Array kosong = tidak ada baris yang cocok = password salah.
+    const cocok = await sbGet('outlets',
+      'select=nama&nama=eq.'+encodeURIComponent(outletNama)+
+      '&password=eq.'+encodeURIComponent(pass));
+    if(!cocok || cocok.length === 0){
       showErr('❌ Password salah!');
       btn.disabled = false;
       btn.textContent = 'Masuk';
@@ -4108,12 +4119,12 @@ async function loginOwner(){
   if(!pass){ showErr('Isi password owner'); return; }
 
   try {
-    const data = await sbGet('owner_config', 'select=password&id=eq.1');
-    if(!data || data.length === 0){
-      showErr('Owner config tidak ditemukan');
-      return;
-    }
-    if(data[0].password !== pass){
+    // Password dicocokkan DI SERVER. Yang diminta balik hanya kolom id,
+    // jadi password owner tidak pernah dikirim ke browser.
+    // Array kosong = password salah (atau baris config-nya belum ada).
+    const cocok = await sbGet('owner_config',
+      'select=id&id=eq.1&password=eq.'+encodeURIComponent(pass));
+    if(!cocok || cocok.length === 0){
       showErr('❌ Password owner salah!');
       return;
     }
