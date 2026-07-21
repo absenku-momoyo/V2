@@ -2926,6 +2926,7 @@ function jarakMeter(la1, ln1, la2, ln2){
 // CREW STATE
 // ============================================================
 let crewTodayAbsen = null;   // row absensi hari ini dari DB
+let crewRecord = null;       // row crew milik user (untuk aturan libur)
 let clockType = 'in';
 let currentGPS = null;
 let currentGPSAccuracy = null;
@@ -2995,6 +2996,21 @@ async function loadTodayAbsen(){
     console.warn('Load today absen error:', e);
     crewTodayAbsen = null;
   }
+
+  // Cache row crew — dipakai updateStatusToday() untuk menentukan apakah
+  // tombol libur perlu ditampilkan hari ini. Sengaja tanpa "select" supaya
+  // tetap jalan walau kolom hari_libur belum ada di DB.
+  // Kalau gagal, biarkan null → tombol jatuh ke aturan normal Sen-Jum.
+  try {
+    const c = await sbGet('crew',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&limit=1');
+    crewRecord = (c && c.length>0) ? c[0] : null;
+  } catch(e){
+    console.warn('Load crew record error:', e);
+  }
+
   updateStatusToday();
 }
 
@@ -3013,8 +3029,14 @@ function updateStatusToday(){
     el.innerHTML = '<span style="color:var(--text3)">Belum absen hari ini</span>';
     ci.disabled = false;
     co.disabled = true;
-    // Tombol libur: Sen-Jum saja, dan cek belum ambil libur minggu ini (TODO nanti, sekarang selalu tampil)
-    bL.style.display = (dow>=1 && dow<=5) ? 'block' : 'none';
+    // Tombol libur: kalau crew punya hari libur khusus, hanya tampil di hari
+    // itu (boleh Sabtu/Minggu). Selain itu aturan normal Senin-Jumat.
+    // Ini KOSMETIK saja — validasi sebenarnya (training, hari, kuota mingguan)
+    // ada di ambilLibur(), karena tombol yang disembunyikan tetap bisa
+    // dilewati lewat console browser.
+    const hlBtn = bacaHariLibur(crewRecord);
+    const bolehHariIni = (hlBtn !== null) ? (dow === hlBtn) : (dow>=1 && dow<=5);
+    bL.style.display = bolehHariIni ? 'block' : 'none';
     return;
   }
 
@@ -3494,9 +3516,117 @@ async function submitClock(){
 // ============================================================
 // AMBIL LIBUR
 // ============================================================
+const HARI_NAMA = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+
+// Daftar 7 tanggal "DD/MM/YYYY" untuk minggu berjalan (Senin s/d Minggu).
+// absensi.tanggal bertipe TEXT DD/MM/YYYY, jadi perbandingan rentang gte/lte
+// TIDAK kronologis ("01/12" < "05/01" secara leksikografis). Rentang minggu
+// karena itu dicacah jadi daftar tanggal eksplisit untuk dipakai dengan in.().
+function tanggalMingguIni(ref){
+  const d = ref ? new Date(ref) : new Date();
+  const mundur = (d.getDay() === 0) ? 6 : d.getDay() - 1;   // Minggu -> Senin 6 hari lalu
+  const senin = new Date(d.getFullYear(), d.getMonth(), d.getDate() - mundur);
+  const out = [];
+  for(let i = 0; i < 7; i++){
+    const x = new Date(senin.getFullYear(), senin.getMonth(), senin.getDate() + i);
+    out.push(`${String(x.getDate()).padStart(2,'0')}/${String(x.getMonth()+1).padStart(2,'0')}/${x.getFullYear()}`);
+  }
+  return out;
+}
+
+// Baca kolom crew.hari_libur dengan aman.
+//   null / kolom belum ada / nilai di luar 0-6 -> null (aturan normal Sen-Jum)
+//   0-6 -> crew hanya boleh libur di hari itu (0=Minggu ... 6=Sabtu)
+// PENTING: nilai 0 (Minggu) itu falsy — jangan pernah pakai pengecekan
+// truthy di sini, nanti crew libur-Minggu ikut dianggap tidak punya aturan.
+function bacaHariLibur(crewRec){
+  const v = crewRec ? crewRec.hari_libur : null;
+  if(v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return (Number.isInteger(n) && n >= 0 && n <= 6) ? n : null;
+}
+
+// Bedakan gangguan koneksi dari error di sisi server, supaya crew tahu
+// apa yang harus dilakukan.
+// sbGet() melempar TypeError kalau fetch gagal total (offline, DNS, timeout),
+// dan Error('sbGet <kode>') kalau server menjawab tapi statusnya bukan 2xx.
+function pesanGagalKoneksi(err){
+  if(navigator.onLine === false || err instanceof TypeError){
+    return 'Tidak ada koneksi internet. Cek sinyal atau WiFi, lalu coba lagi.';
+  }
+  return 'Gagal menghubungi server. Coba lagi beberapa saat.';
+}
+
 async function ambilLibur(){
-  const dow = new Date().getDay();
-  if(dow===0 || dow===6){ showToast('❌ Libur tidak bisa Sabtu/Minggu'); return; }
+  const now = new Date();
+  const dow = now.getDay();
+
+  // Ambil data crew untuk cek masa training & hari libur khusus.
+  // Tanpa "select" supaya tetap jalan walau kolom hari_libur belum ada di DB.
+  let crewData = null;
+  try {
+    const d = await sbGet('crew',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&outlet_nama=eq.'+encodeURIComponent(user.outlet)+
+      '&limit=1');
+    crewData = (d && d.length > 0) ? d[0] : null;
+  } catch(e){
+    // Gagal verifikasi = tolak. Kalau diloloskan, validasi jadi tidak ada gunanya.
+    alert('❌ Gagal cek data crew.\n\n'+pesanGagalKoneksi(e));
+    return;
+  }
+
+  // --- VALIDASI 1: masa training ---
+  // Sama persis dengan hitungTier: training = <= 14 hari kalender sejak masuk.
+  if(crewData && crewData.tanggal_masuk){
+    const masuk = new Date(crewData.tanggal_masuk);
+    const hariKerja = Math.floor((now - masuk) / (1000*60*60*24));
+    if(hariKerja <= 14){
+      alert('❌ Belum dapat jatah libur.\n\nSelesaikan dulu masa training 14 hari.');
+      return;
+    }
+  }
+
+  // --- VALIDASI 2: hari yang boleh ---
+  const hariLibur = bacaHariLibur(crewData);
+  if(hariLibur !== null){
+    // Punya hari libur tetap: HANYA hari itu, sengaja boleh Sabtu/Minggu.
+    if(dow !== hariLibur){
+      alert(`❌ Jatah liburmu hanya hari ${HARI_NAMA[hariLibur]}.`);
+      return;
+    }
+  } else {
+    // Aturan normal: Senin-Jumat saja.
+    if(dow === 0 || dow === 6){
+      alert('❌ Libur tidak bisa Sabtu/Minggu.');
+      return;
+    }
+  }
+
+  // --- VALIDASI 3: maksimal 1x libur per minggu (Senin s/d Minggu) ---
+  let liburMinggu = null;
+  try {
+    const daftar = tanggalMingguIni(now).map(t => '"'+t+'"').join(',');
+    liburMinggu = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&status=eq.libur'+
+      '&tanggal=in.('+daftar+')');
+  } catch(e){
+    alert('❌ Gagal cek jatah libur.\n\n'+pesanGagalKoneksi(e));
+    return;
+  }
+  if(liburMinggu && liburMinggu.length > 0){
+    const t = liburMinggu[0].tanggal || '';
+    const p = t.split('/');
+    let label = t;
+    if(p.length === 3){
+      const dt = new Date(+p[2], +p[1]-1, +p[0]);
+      if(!isNaN(dt)) label = `${HARI_NAMA[dt.getDay()]} ${p[0]}/${p[1]}`;
+    }
+    alert(`❌ Kamu sudah ambil libur minggu ini (${label}).\n\nJatah libur 1x per minggu.`);
+    return;
+  }
+
   if(!confirm('Ambil libur hari ini?\n\nLibur dibayar jika tidak ada alpha di bulan ini.')) return;
 
   // Cek ulang di DB
