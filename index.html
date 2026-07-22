@@ -237,6 +237,9 @@ body{min-height:100vh}
       <div id="shift-chip-area" style="margin-top:10px"></div>
     </div>
 
+    <!-- Hasil pengajuan yang baru diputuskan owner — diisi loadHasilPengajuan() -->
+    <div id="hasil-pengajuan" style="display:none"></div>
+
     <!-- Peringatan alpha 3 hari terakhir — diisi loadAlphaKoreksi() -->
     <div id="alpha-warning" style="display:none"></div>
 
@@ -3201,7 +3204,7 @@ function crewTab(t){
   });
   if(t==='profil') loadProfil();
   if(t==='izin') loadIzinRiwayat();
-  if(t==='home') loadAlphaKoreksi();
+  if(t==='home'){ loadAlphaKoreksi(); loadHasilPengajuan(); }
 }
 
 // ============================================================
@@ -4062,6 +4065,98 @@ function tanggalNHariLalu(n){
     out.push(`${String(x.getDate()).padStart(2,'0')}/${String(x.getMonth()+1).padStart(2,'0')}/${x.getFullYear()}`);
   }
   return out;
+}
+
+// ============================================================
+// KARTU HASIL PENGAJUAN (Home crew)
+// Murni MEMBACA status yang sudah ditulis approveNotif/rejectNotif.
+// Kedua fungsi itu tidak diubah sama sekali.
+// ============================================================
+//
+// CATATAN PENTING soal jendela waktu:
+// Tabel notifikasi TIDAK punya kolom yang mencatat KAPAN status berubah jadi
+// approved/rejected — yang ada hanya created_at, yaitu kapan crew MENGIRIM
+// pengajuan. Jadi jendela di bawah dihitung dari waktu PENGIRIMAN, bukan
+// waktu keputusan.
+// Akibatnya 24 jam terlalu sempit: pengajuan yang baru di-acc owner dua hari
+// kemudian tidak akan pernah muncul di kartu ini. 72 jam dipilih supaya
+// keputusan yang agak lambat tetap sempat terlihat crew.
+//
+// Ini pendekatan sederhana TANPA kolom "sudah dibaca". Efeknya kartu bisa
+// muncul lagi tiap kali Home dibuka selama masih dalam jendela ini; crew
+// bisa menutupnya manual lewat tombol ×. Kalau nanti mengganggu, solusi
+// sebenarnya adalah menambah kolom sudah_dibaca (atau updated_at) di tabel
+// notifikasi — di luar cakupan sekarang.
+const JAM_HASIL_PENGAJUAN = 72;
+
+// Ditutup manual oleh crew. Sengaja hanya disimpan di memori, tidak ke
+// database: begitu aplikasi dibuka ulang, kartu boleh muncul lagi kalau
+// memang masih relevan.
+let _hasilPengajuanDitutup = false;
+
+function tutupHasilPengajuan(){
+  _hasilPengajuanDitutup = true;
+  const box = document.getElementById('hasil-pengajuan');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+async function loadHasilPengajuan(){
+  const box = document.getElementById('hasil-pengajuan');
+  if(!box || !user || user.role !== 'crew') return;
+  if(_hasilPengajuanDitutup){ box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const batas = new Date(Date.now() - JAM_HASIL_PENGAJUAN*60*60*1000).toISOString();
+  let rows = [];
+  try {
+    // created_at bertipe timestamptz (bukan TEXT), jadi perbandingan gte di
+    // sini memang kronologis — berbeda dengan absensi.tanggal yang harus
+    // dicacah jadi daftar tanggal.
+    rows = await sbGet('notifikasi',
+      'nama=eq.'+encodeURIComponent(user.nama)+
+      '&status=neq.pending'+
+      '&created_at=gte.'+encodeURIComponent(batas)+
+      '&order=created_at.desc') || [];
+  } catch(e){
+    // Query gagal tidak boleh mengganggu Home — sembunyikan saja.
+    console.warn('Load hasil pengajuan gagal:', e);
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  if(rows.length === 0){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  let html = '<div class="card" style="border-color:var(--blue)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
+      '<div class="card-lbl" style="color:var(--blue);margin-bottom:0">📬 Hasil Pengajuanmu</div>'+
+      '<button onclick="tutupHasilPengajuan()" title="Tutup" style="border:none;background:transparent;color:var(--text3);font-size:20px;line-height:1;cursor:pointer;padding:0 2px">&times;</button>'+
+    '</div>';
+
+  rows.forEach(n => {
+    const disetujui = n.status === 'approved';
+    const tgl = String(n.tanggal || '').slice(0,5) || '-';
+    let pesan;
+    if(String(n.tipe || '').startsWith(KOREKSI_PREFIX)){
+      const t = targetKoreksiDari(n.tipe);
+      pesan = disetujui
+        ? `✅ Koreksi alphamu (${tgl}) disetujui — sekarang tercatat <b>${t ? t.label : 'sesuai pengajuan'}</b>`
+        : `❌ Pengajuanmu (${tgl}) ditolak`;
+    } else {
+      const label = labelTipeNotif(n.tipe);
+      pesan = disetujui
+        ? `✅ Pengajuan ${label} (${tgl}) disetujui`
+        : `❌ Pengajuan ${label} (${tgl}) ditolak`;
+    }
+    html += `<div style="font-size:13px;color:${disetujui?'var(--green)':'var(--red)'};padding:8px 0;border-top:1px solid var(--border);line-height:1.5">${pesan}</div>`;
+  });
+
+  html += '</div>';
+  box.innerHTML = html;
+  box.style.display = 'block';
 }
 
 // Kartu peringatan alpha di halaman Home.
