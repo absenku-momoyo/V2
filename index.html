@@ -265,10 +265,11 @@ body{min-height:100vh}
 
       <div class="field">
         <label class="lbl">Jenis</label>
+        <!-- Satu pilihan saja. Alasan spesifik (sakit / keperluan / dll)
+             ditulis crew di kolom Keterangan yang memang wajib diisi.
+             Nilai 'cuti' dipertahankan supaya sama dengan data lama. -->
         <select class="input" id="iz-tipe" style="margin-bottom:0">
-          <option value="cuti">Cuti</option>
-          <option value="izin-sakit">Izin Sakit</option>
-          <option value="izin-keperluan">Izin Keperluan</option>
+          <option value="cuti">Cuti / Izin</option>
         </select>
       </div>
       <div class="field">
@@ -277,7 +278,7 @@ body{min-height:100vh}
       </div>
       <div class="field">
         <label class="lbl">Keterangan</label>
-        <textarea class="input" id="iz-ket" rows="3" placeholder="Contoh: Sakit demam, ke dokter..." style="margin-bottom:0;resize:vertical;font-family:inherit"></textarea>
+        <textarea class="input" id="iz-ket" rows="3" placeholder="Tulis alasannya. Contoh: sakit demam ke dokter / acara keluarga..." style="margin-bottom:0;resize:vertical;font-family:inherit"></textarea>
       </div>
       <button class="btn btn-brand" id="btn-ajukan-izin" onclick="ajukanIzin()">📤 Ajukan</button>
     </div>
@@ -296,6 +297,11 @@ body{min-height:100vh}
       <div style="font-size:12px;color:var(--text3);margin-top:2px" id="profil-outlet">-</div>
       <div id="profil-tier-chip" style="margin-top:8px"></div>
       <div id="profil-masa" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">🏖️ Jatah Cuti &amp; Izin</div>
+      <div id="profil-cuti" style="font-size:13px;color:var(--text2)">-</div>
     </div>
 
     <div class="card">
@@ -1283,6 +1289,40 @@ async function loadProfil(){
   document.getElementById('cal-label').textContent = `📅 Kalender ${bulanNama} ${tahun}`;
   renderMiniCalendar(bulan, tahun, absensiMap);
 
+  // Kartu jatah cuti. crewData sudah diambil di atas, jadi tinggal ambil
+  // baris cutinya saja.
+  try {
+    const cutiRows = await sbGet('absensi',
+      'nama=eq.'+encodeURIComponent(user.nama)+'&status=eq.cuti');
+    const k = hitungKuotaCuti(crewData, cutiRows || [], new Date());
+    const elCuti = document.getElementById('profil-cuti');
+
+    if(!k.berhak && k.mulaiBerhak){
+      elCuti.innerHTML =
+        `<div style="color:var(--text3)">Belum dapat jatah cuti/izin.</div>`+
+        `<div style="margin-top:4px">Berhak mulai <b>${formatTglID(k.mulaiBerhak)}</b></div>`;
+    } else if(!k.berhak){
+      elCuti.innerHTML = `<span style="color:var(--text3)">Belum bisa dihitung — ${k.alasan}.</span>`;
+    } else {
+      const sisaTampil = Math.max(0, k.sisa);
+      const warna = sisaTampil === 0 ? 'var(--red)' : (sisaTampil <= 2 ? 'var(--amber)' : 'var(--green)');
+      const bg = sisaTampil === 0 ? 'var(--red-bg)' : (sisaTampil <= 2 ? 'var(--amber-bg)' : 'var(--green-bg)');
+      elCuti.innerHTML =
+        `<div style="background:${bg};padding:10px 12px;border-radius:8px;text-align:center">
+           <div style="font-size:22px;font-weight:700;color:${warna}">${sisaTampil} dari ${k.kuota}</div>
+           <div style="font-size:11px;color:${warna};margin-top:2px">Sisa cuti/izin periode ini</div>
+         </div>
+         <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">
+           📅 Periode berjalan: <b>${formatTglID(k.awalPeriode)}</b> s/d <b>${formatTglID(k.akhirPeriode)}</b><br>
+           Terpakai ${k.terpakai} hari${k.pakaiSaldoAwal && k.saldoAwal > 0 ? ` (${k.saldoAwal} dari pendataan awal + ${k.cutiSistem} tercatat sistem)` : ''}<br>
+           ℹ️ Cuti, izin sakit, dan izin keperluan memakai jatah yang sama.
+         </div>`;
+    }
+  } catch(e){
+    document.getElementById('profil-cuti').innerHTML =
+      '<span style="color:var(--text3)">Gagal memuat jatah cuti.</span>';
+  }
+
   // Estimasi gaji
   if(crewData){
     const statsObj = {masuk, libur, cuti, alpha, lemburJam, lemburHari, liburNojatah:0};
@@ -1336,6 +1376,37 @@ async function ajukanIzin(){
 
   const btn = document.getElementById('btn-ajukan-izin');
   btn.disabled = true; btn.textContent = 'Mengirim...';
+  const pulihkanBtnIzin = () => { btn.disabled = false; btn.textContent = '📤 Ajukan'; };
+
+  // --- KUOTA CUTI ---
+  // Berlaku untuk SEMUA tipe yang menghasilkan baris berstatus cuti
+  // (cuti, izin sakit, izin keperluan) — ketiganya memotong jatah yang sama.
+  // Acuan sengaja TANGGAL YANG DIAJUKAN, bukan hari ini: kalau tanggalnya
+  // jatuh di periode berikutnya, yang dicek harus jatah periode itu.
+  if(TIPE_MEMOTONG_CUTI.includes(tipe)){
+    let k;
+    try {
+      k = await ambilKuotaCuti(user.nama, user.outlet, parseTglID(tglFmt) || new Date());
+    } catch(e){
+      pulihkanBtnIzin();
+      alert('❌ Gagal memeriksa jatah cuti/izin.\n\n'+pesanGagalKoneksi(e));
+      return;
+    }
+    if(!k.berhak){
+      pulihkanBtnIzin();
+      alert(k.mulaiBerhak
+        ? `❌ Belum dapat jatah cuti/izin sampai ${formatTglID(k.mulaiBerhak)}.`
+        : `❌ Jatah cuti/izin belum bisa dihitung — ${k.alasan}.`);
+      return;
+    }
+    if(k.sisa <= 0){
+      pulihkanBtnIzin();
+      alert(`❌ Jatah cuti/izin periode ini sudah habis (${k.terpakai}/${k.kuota}).\n\n`+
+            `Cuti, izin sakit, dan izin keperluan memakai jatah yang sama.\n\n`+
+            `Periode berakhir ${formatTglID(k.akhirPeriode)}, jatah baru mulai ${formatTglID(tambahHari(k.akhirPeriode,1))}.`);
+      return;
+    }
+  }
 
   const ok = await sbInsert('notifikasi', {
     tipe, nama: user.nama, outlet_nama: user.outlet,
@@ -2995,6 +3066,14 @@ const OUTLET_JAM_OVERRIDE = {
   'Momoyo Pasuruan': {
     weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
     weekend: {pagi:{masuk:'07:00',pulang:'16:00'}, siang:{masuk:'14:00',pulang:'22:00'}}
+  },
+  // Bululawang: weekday & weekend sama persis dengan default. Yang khusus
+  // hanya hari JUMAT — shift Pagi masuk lebih awal (07:00) dan pulang lebih
+  // awal (16:00). Shift Siang hari Jumat tetap seperti biasa.
+  'Momoyo Bululawang': {
+    weekday: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
+    weekend: {pagi:{masuk:'08:00',pulang:'17:00'}, siang:{masuk:'14:00',pulang:'22:00'}},
+    jumat:   {pagi:{masuk:'07:00',pulang:'16:00'}, siang:{masuk:'14:00',pulang:'22:00'}}
   }
 };
 
@@ -3032,11 +3111,13 @@ function isWeekend(outletNama){
   if(outletNama === 'Momoyo Pasuruan') return dow === 0; // hanya Minggu
   return dow===0 || dow===6; // outlet lain: Sabtu+Minggu = weekend
 }
+function isJumat(){
+  return new Date().getDay() === 5;
+}
 function getExpectedShift(outletNama, jamClockIn, tim){
   const jam = jamClockIn || getJam();
   const isPagi = toMenit(jam) < SHIFT_CUTOFF_MENIT;
   const shiftKey = isPagi ? 'pagi' : 'siang';
-  const dayKey = isWeekend(outletNama) ? 'weekend' : 'weekday';
 
   // Pasuruan: pakai config tim kalau ada
   let cfg;
@@ -3045,6 +3126,12 @@ function getExpectedShift(outletNama, jamClockIn, tim){
   } else {
     cfg = OUTLET_JAM_OVERRIDE[outletNama] || OUTLET_JAM_DEFAULT;
   }
+
+  // Kunci hari. 'jumat' HANYA dipakai kalau config outletnya memang
+  // menyediakannya (sekarang: Bululawang saja). Outlet lain tetap
+  // weekday/weekend persis seperti sebelumnya.
+  let dayKey = isWeekend(outletNama) ? 'weekend' : 'weekday';
+  if(cfg.jumat && isJumat()) dayKey = 'jumat';
 
   const jamCfg = cfg[dayKey][shiftKey];
   const timLabel = tim ? `-${tim}` : '';
@@ -3852,6 +3939,103 @@ function parseTglID(s){
   return isNaN(d) ? null : d;
 }
 
+// ============================================================
+// KUOTA CUTI
+// Jatah 7 hari per PERIODE. Periode = per ulang tahun selesai training,
+// dimulai setelah 1 tahun kerja terhitung dari selesai training.
+//   masuk 2024-07-30 -> selesai training 2024-08-13 -> berhak 2025-08-13
+//   periode berjalan pada 22/07/2026: 2025-08-13 s/d 2026-08-12
+// ============================================================
+const KUOTA_CUTI_PER_PERIODE = 7;
+const HARI_TRAINING = 14;
+
+// Tipe pengajuan yang saat di-approve menghasilkan baris absensi berstatus
+// 'cuti' — SEMUANYA memotong jatah, termasuk izin sakit & izin keperluan
+// (tidak ada kategori sakit terpisah di aturan owner).
+// Harus tetap sinkron dengan pemetaan absenStatus di approveNotif().
+//
+// Dropdown iz-tipe sekarang hanya menawarkan 'cuti' (label "Cuti / Izin"),
+// tapi daftar ini sengaja TETAP memuat tipe lama: pengajuan izin-sakit /
+// izin-keperluan yang sudah terlanjur tersimpan harus tetap dikenali.
+const TIPE_MEMOTONG_CUTI = ['cuti', 'izin-sakit', 'izin-keperluan'];
+
+// Buang komponen jam supaya perbandingan tanggal tidak meleset karena waktu.
+function tglSaja(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function tambahHari(d, n){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()+n); }
+function tambahTahun(d, n){ return new Date(d.getFullYear()+n, d.getMonth(), d.getDate()); }
+
+// Hitung status kuota cuti crew pada suatu tanggal acuan.
+// cutiRows = baris absensi milik crew yang berstatus 'cuti' (tanggal DD/MM/YYYY).
+// Semua perbandingan tanggal dilakukan setelah di-parse ke Date — kolom
+// absensi.tanggal bertipe TEXT, jadi perbandingan string TIDAK kronologis.
+function hitungKuotaCuti(crewRec, cutiRows, tglAcuan){
+  const acuan = tglSaja(tglAcuan ? new Date(tglAcuan) : new Date());
+  const hasil = {
+    berhak: false, alasan: '',
+    kuota: KUOTA_CUTI_PER_PERIODE, terpakai: 0, sisa: 0, cutiSistem: 0,
+    mulaiBerhak: null, awalPeriode: null, akhirPeriode: null,
+    saldoAwal: 0, pakaiSaldoAwal: false
+  };
+
+  const tm = crewRec ? crewRec.tanggal_masuk : null;
+  if(!tm){ hasil.alasan = 'tanggal masuk belum diisi'; return hasil; }
+  const masuk = tglSaja(new Date(tm));
+  if(isNaN(masuk)){ hasil.alasan = 'tanggal masuk tidak valid'; return hasil; }
+
+  const selesaiTraining = tambahHari(masuk, HARI_TRAINING);
+  hasil.mulaiBerhak = tambahTahun(selesaiTraining, 1);
+  if(acuan < hasil.mulaiBerhak){
+    hasil.alasan = 'belum genap 1 tahun sejak selesai training';
+    return hasil;
+  }
+  hasil.berhak = true;
+
+  // Periode berjalan = ulang tahun selesai training terakhir yang <= acuan.
+  let n = acuan.getFullYear() - selesaiTraining.getFullYear();
+  if(tambahTahun(selesaiTraining, n) > acuan) n--;
+  hasil.awalPeriode = tambahTahun(selesaiTraining, n);
+  hasil.akhirPeriode = tambahHari(tambahTahun(hasil.awalPeriode, 1), -1);
+
+  // Saldo awal hasil pendataan manual. Tanpa cuti_saldo_tanggal kita tidak
+  // tahu batas waktunya, jadi saldo diabaikan dan sistem jadi satu-satunya
+  // sumber hitungan (menghindari dobel hitung).
+  const saldoTgl = crewRec.cuti_saldo_tanggal ? tglSaja(new Date(crewRec.cuti_saldo_tanggal)) : null;
+  hasil.saldoAwal = saldoTgl ? (parseInt(crewRec.cuti_terpakai) || 0) : 0;
+
+  // Cuti yang tercatat sistem: di dalam periode berjalan DAN setelah tanggal
+  // saldo (yang sebelum/pada tanggal saldo sudah terhitung di saldo awal).
+  (cutiRows || []).forEach(r => {
+    if(r.status !== 'cuti') return;
+    const t = parseTglID(r.tanggal);
+    if(!t) return;
+    const td = tglSaja(t);
+    if(td < hasil.awalPeriode || td > hasil.akhirPeriode) return;
+    if(saldoTgl && td <= saldoTgl) return;
+    hasil.cutiSistem++;
+  });
+
+  // Kalau periode sudah berganti SETELAH saldo diisi, saldo awal hangus.
+  hasil.pakaiSaldoAwal = !!(saldoTgl && hasil.awalPeriode <= saldoTgl);
+  hasil.terpakai = hasil.pakaiSaldoAwal ? hasil.saldoAwal + hasil.cutiSistem : hasil.cutiSistem;
+  hasil.sisa = KUOTA_CUTI_PER_PERIODE - hasil.terpakai;
+  return hasil;
+}
+
+// Ambil bahan perhitungan kuota cuti dari DB.
+// Query crew sengaja tanpa "select" supaya tetap jalan walau kolom
+// cuti_terpakai / cuti_saldo_tanggal belum ada di database.
+async function ambilKuotaCuti(nama, outlet, tglAcuan){
+  const c = await sbGet('crew',
+    'nama=eq.'+encodeURIComponent(nama)+
+    '&outlet_nama=eq.'+encodeURIComponent(outlet)+
+    '&limit=1');
+  const crewRec = (c && c.length > 0) ? c[0] : null;
+  // Jumlah baris cuti per crew kecil, jadi ambil semua lalu saring di JS.
+  const rows = await sbGet('absensi',
+    'nama=eq.'+encodeURIComponent(nama)+'&status=eq.cuti');
+  return hitungKuotaCuti(crewRec, rows || [], tglAcuan);
+}
+
 // N tanggal "DD/MM/YYYY" ke belakang, TIDAK termasuk hari ini.
 function tanggalNHariLalu(n){
   const out = [];
@@ -4013,8 +4197,31 @@ async function kirimKoreksi(){
       }
     }
 
-    // TODO: kalau target === 'cuti', cek kuota cuti di sini setelah fitur
-    // total/kuota cuti selesai dibuat. Untuk sekarang sengaja diloloskan.
+    // --- KUOTA CUTI ---
+    // Dipicu oleh STATUS hasilnya, bukan nama pilihannya: Cuti, Izin Sakit,
+    // dan Izin Keperluan sama-sama menghasilkan baris berstatus cuti dan
+    // memotong jatah yang sama. Ikut TARGET_KOREKSI supaya tetap sinkron
+    // kalau pilihannya bertambah.
+    // Acuan sengaja TANGGAL ALPHA, bukan hari ini: jatah dinilai menurut
+    // periode tempat tanggal itu berada. Sama seperti cek libur di atas.
+    if(info.status === 'cuti'){
+      const k = await ambilKuotaCuti(user.nama, user.outlet, tglAlpha);
+      if(!k.berhak){
+        pulihkanBtn();
+        alert(k.mulaiBerhak
+          ? `❌ Pada tanggal itu kamu belum dapat jatah cuti/izin.\n\nBerhak mulai ${formatTglID(k.mulaiBerhak)}.`
+          : `❌ Jatah cuti/izin belum bisa dihitung — ${k.alasan}.`);
+        return;
+      }
+      if(k.sisa <= 0){
+        pulihkanBtn();
+        alert(`❌ Jatah cuti/izin periode itu sudah habis (${k.terpakai}/${k.kuota}).\n\n`+
+              `Cuti, izin sakit, dan izin keperluan memakai jatah yang sama.\n\n`+
+              `Periode: ${formatTglID(k.awalPeriode)} s/d ${formatTglID(k.akhirPeriode)}.\n`+
+              `Coba ajukan koreksi ke pilihan lain.`);
+        return;
+      }
+    }
 
   } catch(e){
     pulihkanBtn();
