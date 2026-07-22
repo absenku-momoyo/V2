@@ -464,14 +464,31 @@ body{min-height:100vh}
 
   <!-- TAB: HOME -->
   <div class="scroll" id="owner-tab-home">
+    <!-- DASHBOARD HARI INI -->
+    <div class="card">
+      <div class="card-lbl">📋 Perlu Tindakan</div>
+      <div id="owner-dash-aksi" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="color:var(--text3);font-size:12px">Memuat...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl" id="owner-dash-belum-lbl">⏳ Belum Absen Hari Ini</div>
+      <div id="owner-dash-belum" style="font-size:13px;color:var(--text2)">Memuat...</div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">🏖️ Cuti &amp; Libur Hari Ini</div>
+      <div id="owner-dash-cutilibur" style="font-size:13px;color:var(--text2)">Memuat...</div>
+    </div>
+
     <div class="card">
       <div class="card-lbl">📊 Ringkasan</div>
       <div id="owner-stats" style="font-size:13px;color:var(--text2)">Memuat...</div>
     </div>
-    <div class="card">
-      <div class="card-lbl">🔔 Notifikasi Hari Ini</div>
-      <div id="owner-notif-summary" style="font-size:12px;color:var(--text2)">Memuat...</div>
-    </div>
+    <!-- Kartu "🔔 Notifikasi Hari Ini" dihapus: kartu "📋 Perlu Tindakan"
+         di atas sudah menampilkan angka yang sama, dipisah antara pengajuan
+         cuti/izin dan koreksi alpha. -->
     <div class="card">
       <div class="card-lbl">🏪 Outlet Terdaftar</div>
       <div id="owner-outlet-list"></div>
@@ -4405,7 +4422,120 @@ function ownerTab(t){
   if(t==='home') renderOwnerHome();
 }
 
+// Outlet yang crew-nya tidak wajib absen di outlet — sama dengan
+// OUTLET_DIKECUALIKAN di Apps Script. Kalau daftar di sana berubah,
+// ubah juga di sini.
+const OUTLET_DIKECUALIKAN = ['Supervisor'];
+
+// ============================================================
+// DASHBOARD OWNER — kondisi HARI INI
+// Semua data diambil sekali di sini lalu diolah di JS, supaya tidak
+// bolak-balik query untuk tiap kartu.
+// ============================================================
+async function renderDashboardOwner(){
+  const elAksi = document.getElementById('owner-dash-aksi');
+  const elBelum = document.getElementById('owner-dash-belum');
+  const elCL = document.getElementById('owner-dash-cutilibur');
+  const tgl = todayStr();   // DD/MM/YYYY, format yang sama dengan absensi.tanggal
+
+  let crews, absenHariIni, pending;
+  try {
+    crews = await sbGet('crew', 'select=nama,outlet_nama&aktif=eq.true');
+    absenHariIni = await sbGet('absensi',
+      'select=nama,status&tanggal=eq.'+encodeURIComponent(tgl));
+    pending = await sbGet('notifikasi', 'select=id,tipe&status=eq.pending');
+  } catch(e){
+    const pesan = '<span style="color:var(--red)">Gagal memuat — '+pesanGagalKoneksi(e)+'</span>';
+    elAksi.innerHTML = '<div style="grid-column:1/-1">'+pesan+'</div>';
+    elBelum.innerHTML = pesan;
+    elCL.innerHTML = pesan;
+    return;
+  }
+
+  // ---------- 2 & 3. PENGAJUAN & KOREKSI PENDING ----------
+  // Koreksi alpha disimpan dengan tipe berawalan 'koreksi-'. Nilai
+  // 'koreksi_alpha' hanya dipakai sebagai label notif Telegram, tapi ikut
+  // dikenali di sini untuk berjaga-jaga.
+  const isKoreksi = (t) => {
+    const s = String(t || '');
+    return s.startsWith(KOREKSI_PREFIX) || s === 'koreksi_alpha';
+  };
+  const nKoreksi = (pending || []).filter(n => isKoreksi(n.tipe)).length;
+  const nPengajuan = (pending || []).length - nKoreksi;
+
+  const kotak = (angka, judul, ada) => `
+    <div style="background:${ada?'var(--red-bg)':'var(--surface2)'};padding:12px 8px;border-radius:8px;text-align:center">
+      <div style="font-size:26px;font-weight:700;color:${ada?'var(--red)':'var(--text3)'}">${angka}</div>
+      <div style="font-size:11px;color:${ada?'var(--red)':'var(--text3)'};margin-top:2px;line-height:1.4">${judul}</div>
+    </div>`;
+  elAksi.innerHTML =
+    kotak(nPengajuan, 'Pengajuan<br>Cuti / Izin', nPengajuan > 0) +
+    kotak(nKoreksi, 'Koreksi<br>Alpha', nKoreksi > 0) +
+    ((nPengajuan + nKoreksi) > 0
+      ? `<div style="grid-column:1/-1;text-align:center;margin-top:2px">
+           <a href="#" onclick="ownerTab('notif');return false" style="color:var(--brand);font-size:12px;font-weight:700">Buka panel Notifikasi →</a>
+         </div>`
+      : `<div style="grid-column:1/-1;text-align:center;font-size:11px;color:var(--text3);margin-top:2px">✨ Tidak ada yang menunggu persetujuan</div>`);
+
+  // ---------- 1. BELUM ABSEN ----------
+  // Cek by NAMA saja (tidak peduli outlet), sama seperti autoAlpha —
+  // supaya crew yang sedang perbantuan di outlet lain tidak ikut terhitung.
+  const sudah = new Set((absenHariIni || []).map(a => a.nama));
+  const belumPerOutlet = {};
+  let totalBelum = 0;
+  (crews || []).forEach(c => {
+    if(OUTLET_DIKECUALIKAN.indexOf(c.outlet_nama) !== -1) return;
+    if(sudah.has(c.nama)) return;
+    totalBelum++;
+    (belumPerOutlet[c.outlet_nama] = belumPerOutlet[c.outlet_nama] || []).push(c.nama);
+  });
+
+  document.getElementById('owner-dash-belum-lbl').innerHTML =
+    '⏳ Belum Absen Hari Ini' + (totalBelum > 0 ? ` <span style="color:var(--amber)">(${totalBelum})</span>` : '');
+
+  if(totalBelum === 0){
+    elBelum.innerHTML = '<span style="color:var(--green);font-weight:700">✅ Semua crew sudah absen hari ini</span>';
+  } else {
+    // Urut sesuai urutan outlet di OUTLETS (sudah tersortir by id).
+    const urutan = OUTLETS.map(o => o.nama);
+    const daftar = Object.keys(belumPerOutlet).sort((a,b) => {
+      const ia = urutan.indexOf(a), ib = urutan.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+    elBelum.innerHTML =
+      `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">
+         ℹ️ Termasuk crew shift Siang yang jam kerjanya belum mulai — belum tentu bermasalah.
+       </div>` +
+      daftar.map(o => `
+        <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;font-size:12px">${o.replace('Momoyo ','').replace('AI-CHA ','AICHA ')}
+            <span style="color:var(--text3);font-weight:400">· ${belumPerOutlet[o].length}</span></div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${belumPerOutlet[o].join(', ')}</div>
+        </div>`).join('');
+  }
+
+  // ---------- 4. CUTI / LIBUR HARI INI ----------
+  const cutiLibur = (absenHariIni || []).filter(a => a.status === 'cuti' || a.status === 'libur');
+  if(cutiLibur.length === 0){
+    elCL.innerHTML = '<span style="color:var(--text3)">Tidak ada crew cuti/libur hari ini</span>';
+  } else {
+    elCL.innerHTML = cutiLibur
+      .sort((a,b) => String(a.nama).localeCompare(String(b.nama)))
+      .map(a => {
+        const warna = a.status === 'cuti' ? 'var(--blue)' : 'var(--purple)';
+        const bg = a.status === 'cuti' ? 'var(--blue-bg)' : 'var(--purple-bg)';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px">${a.nama}</span>
+          <span style="background:${bg};color:${warna};font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase">${a.status}</span>
+        </div>`;
+      }).join('');
+  }
+}
+
 async function renderOwnerHome(){
+  // Dashboard hari ini (paling atas)
+  renderDashboardOwner();
+
   // Stats ringkas
   try {
     const totalCrew = await sbGet('crew', 'select=id&aktif=eq.true');
@@ -4418,16 +4548,9 @@ async function renderOwnerHome(){
     document.getElementById('owner-stats').innerHTML = '<span style="color:var(--red)">Gagal load stats</span>';
   }
 
-  // Notif summary
-  try {
-    const pending = await sbGet('notifikasi', 'select=id&status=eq.pending');
-    const n = pending.length;
-    document.getElementById('owner-notif-summary').innerHTML = n > 0
-      ? `<span style="color:var(--red);font-weight:700">🔔 ${n} pengajuan menunggu persetujuan</span> <a href="#" onclick="ownerTab('notif');return false" style="color:var(--brand);margin-left:6px">Lihat →</a>`
-      : '<span style="color:var(--text3)">✨ Tidak ada pengajuan pending</span>';
-  } catch(e){
-    document.getElementById('owner-notif-summary').innerHTML = '<span style="color:var(--text3)">-</span>';
-  }
+  // (blok "Notif summary" dihapus bersama kartunya — angka pending sekarang
+  //  ditampilkan renderDashboardOwner() dengan rincian yang lebih jelas,
+  //  memakai data pending yang sudah diambil di sana)
 
   // Outlet list
   const list = document.getElementById('owner-outlet-list');
