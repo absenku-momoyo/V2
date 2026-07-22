@@ -552,6 +552,9 @@ body{min-height:100vh}
         <button class="mini-btn" id="filter-aktif" style="background:var(--brand);color:white" onclick="setFilterCrew('aktif')">Aktif</button>
         <button class="mini-btn" id="filter-resign" style="background:var(--surface2);color:var(--text2)" onclick="setFilterCrew('resign')">Resign</button>
       </div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:10px">
+        💡 Untuk crew berhenti, gunakan <b>Resign</b> — datanya tetap tersimpan untuk rekap gaji.
+      </div>
       <div id="crew-list"></div>
     </div>
   </div>
@@ -746,8 +749,10 @@ body{min-height:100vh}
       <input class="input" type="number" id="ea-lembur" min="0" max="12" style="margin-bottom:0"/>
     </div>
 
+    <!-- Tombol 🗑️ Hapus dihapus: RLS tidak mengizinkan DELETE dari browser,
+         jadi tombolnya hanya akan gagal diam-diam. Untuk membatalkan sebuah
+         absensi, ubah statusnya lewat dropdown di atas. -->
     <div class="btn-row" style="margin-top:14px">
-      <button class="btn" id="btn-ea-delete" style="background:var(--red);color:white;display:none" onclick="deleteAbsensi()">🗑️ Hapus</button>
       <button class="btn btn-outline" onclick="closeModal('modal-edit-absen')">Batal</button>
       <button class="btn btn-green" id="btn-ea-save" onclick="saveEditAbsensi()">💾 Simpan</button>
     </div>
@@ -1954,7 +1959,7 @@ function openEditAbsensi(tgl, absensiId){
   document.getElementById('ea-ci').value = existing?.clock_in || '';
   document.getElementById('ea-co').value = existing?.clock_out || '';
   document.getElementById('ea-lembur').value = existing?.lembur_jam || 0;
-  document.getElementById('btn-ea-delete').style.display = absensiId ? 'block' : 'none';
+  // (tombol Hapus sudah tidak dirender — lihat catatan di modal-edit-absen)
   onEaStatusChange(); // enable/disable fields
   modal.classList.add('show');
 }
@@ -2019,6 +2024,11 @@ async function saveEditAbsensi(){
   }
 }
 
+// NONAKTIF — tidak dipanggil dari mana pun. Tombol pemicunya sudah dihapus
+// karena RLS memblokir DELETE dari browser (permintaan akan gagal diam-diam).
+// Fungsi ini sengaja dibiarkan sebagai rujukan. JANGAN dipasang ulang tanpa
+// menyiapkan policy DELETE lebih dulu; ia juga masih menyebut elemen
+// btn-ea-delete yang kini tidak ada lagi.
 async function deleteAbsensi(){
   if(!window._eaCurrentId) return;
   if(!confirm('Hapus absensi ini? Data tidak bisa dikembalikan.')) return;
@@ -4384,8 +4394,9 @@ function renderCrewList(){
       ? `<button class="mini-btn edit" onclick="openEditCrew('${c.id}')">Edit</button>
          <button class="mini-btn" style="color:var(--purple);background:var(--purple-bg)" onclick="openPindahOutlet('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Pindah</button>
          <button class="mini-btn resign" onclick="resignCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Resign</button>`
-      : `<button class="mini-btn restore" onclick="restoreCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Aktifkan</button>
-         <button class="mini-btn del" onclick="hapusCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Hapus</button>`;
+      // Tombol Hapus dihilangkan: RLS tidak mengizinkan DELETE dari browser,
+      // dan crew yang berhenti memang harus tetap tersimpan untuk rekap gaji.
+      : `<button class="mini-btn restore" onclick="restoreCrew('${c.id}','${c.nama.replace(/'/g,"\\'")}')">Aktifkan</button>`;
     return `
       <div class="crew-row">
         <div class="crew-av">${inisial(c.nama)}</div>
@@ -4588,6 +4599,10 @@ async function restoreCrew(id, nama){
   else showToast('❌ Gagal');
 }
 
+// NONAKTIF — tidak dipanggil dari mana pun. Tombol pemicunya sudah dihapus
+// karena RLS memblokir DELETE dari browser. Crew yang berhenti ditandai
+// Resign (resignCrew), bukan dihapus, supaya riwayat absensi & rekap gajinya
+// tetap utuh. Fungsi ini sengaja dibiarkan sebagai rujukan.
 async function hapusCrew(id, nama){
   if(!confirm(`HAPUS PERMANEN ${nama}?\n\n⚠️ Ini akan menghapus data crew dari DB. Hanya bisa untuk crew resign.\n\nTekan OK untuk konfirmasi.`)) return;
   // Delete pakai DELETE HTTP method
