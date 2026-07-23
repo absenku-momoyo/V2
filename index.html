@@ -25,18 +25,67 @@ body{min-height:100vh}
 .screen.show{display:flex}
 
 /* LOGIN */
-.login-wrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:20px;background:linear-gradient(160deg,#DC2626 0%,#991B1B 100%);color:white;position:relative;overflow:hidden}
-.login-wrap::before{content:'';position:absolute;width:300px;height:300px;background:rgba(255,255,255,.05);border-radius:50%;top:-100px;right:-100px}
-.login-wrap::after{content:'';position:absolute;width:200px;height:200px;background:rgba(255,255,255,.03);border-radius:50%;bottom:-50px;left:-50px}
-.logo-wrap{text-align:center;margin-bottom:24px;position:relative;z-index:1}
-.logo-img{width:110px;height:110px;border-radius:50%;background:white;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.2);margin:0 auto;display:block}
+/* flex:1 + justify-content:center -> kartu benar-benar di tengah layar,
+   bukan menumpuk di bawah. 100dvh dipakai HP modern supaya tidak terpotong
+   bilah browser; baris 100vh di atasnya jadi cadangan untuk HP lama yang
+   belum mengenal satuan dvh (aturan yang tidak dikenal diabaikan). */
+.login-wrap{min-height:100vh;min-height:100dvh;flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 20px;color:white;position:relative;overflow:hidden;
+  background:
+    radial-gradient(circle at 14% 8%, rgba(255,255,255,.17) 0, transparent 42%),
+    radial-gradient(circle at 88% 94%, rgba(0,0,0,.24) 0, transparent 46%),
+    linear-gradient(150deg,#EF4444 0%,#DC2626 45%,#8F1717 100%)}
+.login-wrap::before{content:'';position:absolute;width:320px;height:320px;background:rgba(255,255,255,.09);border-radius:50%;top:-110px;right:-110px}
+.login-wrap::after{content:'';position:absolute;width:240px;height:240px;background:rgba(255,255,255,.06);border-radius:50%;bottom:-70px;left:-70px}
+
+/* DOODLE DEKORATIF (es krim / boba) — murni latar.
+   Lapisan z-index:0 di bawah logo & kartu (keduanya z-index:1), jadi
+   konten selalu di atas. pointer-events:none supaya tidak menghalangi klik.
+   Semua SVG inline (tanpa gambar eksternal). Garis putih tipis, opacity
+   rendah, seperti pola wallpaper samar. */
+.login-doodles{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.login-doodles svg{position:absolute;fill:none;stroke:#fff;stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round}
+/* Ditaruh HANYA di zona atas & bawah + pojok, menjauh dari tengah tempat
+   kartu berada. Ukuran & opacity (6-10%) divariasikan agar terasa organik. */
+.dd1{top:3%;left:-14px;width:96px;opacity:.09;transform:rotate(-12deg)}
+.dd2{top:8%;right:6px;width:60px;opacity:.10;transform:rotate(10deg)}
+.dd3{top:20%;left:14px;width:44px;opacity:.07;transform:rotate(6deg)}
+.dd4{bottom:4%;right:-10px;width:104px;opacity:.08;transform:rotate(8deg)}
+.dd5{bottom:9%;left:8px;width:66px;opacity:.10;transform:rotate(-8deg)}
+.dd6{bottom:24%;right:18px;width:40px;opacity:.07;transform:rotate(-4deg)}
+/* Dua doodle sisi ini paling dekat kartu — sembunyikan di layar sempit
+   supaya tidak bertumpuk dengan kartu login pada HP ~360px. */
+.dd-sisi{opacity:.07}
+.dd-a{top:39%;left:-6px;width:38px;transform:rotate(-6deg)}
+.dd-b{top:46%;right:-6px;width:34px;transform:rotate(8deg)}
+@media (max-width:400px){ .dd-sisi{display:none} }
+@media (prefers-reduced-motion:reduce){ .login-doodles svg{animation:none} }
+.logo-wrap{text-align:center;margin-bottom:26px;position:relative;z-index:1}
+/* Cincin putih tipis di sekeliling logo = kesan glow, tanpa biaya blur. */
+.logo-img{width:112px;height:112px;border-radius:50%;background:white;padding:6px;margin:0 auto;display:block;
+  box-shadow:0 10px 30px rgba(0,0,0,.22), 0 0 0 7px rgba(255,255,255,.10);
+  animation:logoMasuk .55s ease-out both}
 .logo-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.login-title{font-size:30px;font-weight:800;text-align:center;margin-top:14px;letter-spacing:-0.5px}
-.login-sub{text-align:center;opacity:.85;margin-top:4px;font-size:12px;font-weight:500}
-.login-card{background:white;color:var(--text);border-radius:18px;padding:20px;position:relative;z-index:1;box-shadow:0 20px 40px rgba(0,0,0,.15)}
+.login-title{font-size:30px;font-weight:800;text-align:center;margin-top:14px;letter-spacing:-0.5px;animation:naikHalus .5s ease-out .08s both}
+.login-sub{text-align:center;opacity:.88;margin-top:4px;font-size:12px;font-weight:500;animation:naikHalus .5s ease-out .14s both}
+.login-card{background:white;color:var(--text);border-radius:22px;padding:24px 20px;position:relative;z-index:1;
+  box-shadow:0 18px 42px rgba(0,0,0,.22), 0 2px 8px rgba(0,0,0,.08);
+  animation:naikHalus .5s ease-out .2s both}
+@keyframes logoMasuk{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+@keyframes naikHalus{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+/* Hormati setelan "kurangi animasi" di HP. */
+@media (prefers-reduced-motion:reduce){
+  .logo-img,.login-title,.login-sub,.login-card{animation:none}
+}
 .role-switch{display:flex;gap:6px;margin-bottom:18px;background:var(--surface2);padding:4px;border-radius:12px}
-.role-btn{flex:1;padding:11px;border:none;background:transparent;font-weight:700;font-size:13px;border-radius:9px;cursor:pointer;color:var(--text2);transition:all .15s}
+/* Properti disebut satu per satu (bukan 'all') supaya transisinya ringan. */
+.role-btn{flex:1;padding:11px;border:none;background:transparent;font-weight:700;font-size:13px;border-radius:9px;cursor:pointer;color:var(--text2);transition:background-color .25s ease,color .25s ease,box-shadow .25s ease}
 .role-btn.on{background:var(--red);color:white;box-shadow:0 2px 8px rgba(220,38,38,.3)}
+/* Teks bantu tombol Masuk. Muncul/hilang MURNI lewat CSS: select punya
+   atribut required, jadi selama pilihannya masih kosong ia cocok dengan
+   :invalid. Tidak ada JS yang ditambahkan. */
+.login-hint{display:none;margin-top:9px;font-size:11px;color:var(--text3);text-align:center}
+#li-outlet:invalid ~ .login-hint{display:block}
 
 .lbl{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;display:block}
 .input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:12px}
@@ -46,7 +95,7 @@ body{min-height:100vh}
 .btn-brand:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(220,38,38,.3)}
 .btn-brand:disabled{background:#E5E7EB;color:#9CA3AF;cursor:not-allowed;box-shadow:none;transform:none}
 .err-box{background:var(--red-bg);color:var(--red);padding:10px;border-radius:8px;font-size:12px;margin-bottom:10px;display:none}
-.login-foot{text-align:center;margin-top:16px;font-size:10px;opacity:.7;position:relative;z-index:1;letter-spacing:.5px}
+.login-foot{text-align:center;margin-top:18px;font-size:10.5px;opacity:.9;position:relative;z-index:1;letter-spacing:.4px;text-shadow:0 1px 2px rgba(0,0,0,.28)}
 
 /* SCREENS */
 .bar{background:var(--surface);padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
@@ -175,6 +224,25 @@ body{min-height:100vh}
 <!-- LOGIN SCREEN -->
 <div class="screen show" id="sc-login">
   <div class="login-wrap">
+    <!-- Doodle dekoratif (es krim/boba). Murni latar: aria-hidden, di bawah
+         konten, tanpa gambar eksternal. -->
+    <div class="login-doodles" aria-hidden="true">
+      <!-- Es krim cone (besar, pojok kiri atas) -->
+      <svg class="dd1" viewBox="0 0 60 96"><circle cx="22" cy="24" r="13"/><circle cx="38" cy="24" r="13"/><circle cx="30" cy="15" r="12"/><path d="M13 34 L30 92 L47 34"/><path d="M21 50 L39 50 M25 66 L35 66"/></svg>
+      <!-- Cup boba + sedotan (kanan atas) -->
+      <svg class="dd2" viewBox="0 0 60 96"><path d="M14 26 L46 26 L41 90 L19 90 Z"/><path d="M11 26 L49 26"/><path d="M37 6 L41 28"/><circle cx="24" cy="80" r="3"/><circle cx="33" cy="82" r="3"/><circle cx="29" cy="72" r="3"/></svg>
+      <!-- Gerombolan boba (kecil, kiri atas) -->
+      <svg class="dd3" viewBox="0 0 60 60"><circle cx="20" cy="24" r="12"/><circle cx="41" cy="20" r="9"/><circle cx="34" cy="41" r="10"/><circle cx="15" cy="45" r="6"/></svg>
+      <!-- Es loli / popsicle (besar, kanan bawah) -->
+      <svg class="dd4" viewBox="0 0 60 100"><rect x="15" y="8" width="30" height="58" rx="13"/><path d="M30 66 L30 94"/><path d="M22 26 Q30 34 38 26"/></svg>
+      <!-- Soft serve swirl dalam cup (kiri bawah) -->
+      <svg class="dd5" viewBox="0 0 60 96"><path d="M18 52 L42 52 L38 90 L22 90 Z"/><path d="M20 52 Q30 40 40 52 M23 45 Q30 34 37 45 M26 37 Q30 30 34 37 M30 30 L30 24"/></svg>
+      <!-- Taburan / sprinkles (kecil, kanan bawah) -->
+      <svg class="dd6" viewBox="0 0 50 50"><path d="M10 12 L18 8 M24 10 L30 4 M36 16 L44 12 M14 30 L22 26 M31 32 L39 28 M20 42 L28 38"/></svg>
+      <!-- Doodle sisi — disembunyikan di layar sempit (dekat kartu) -->
+      <svg class="dd-sisi dd-a" viewBox="0 0 40 60"><path d="M10 16 L30 16 L27 54 L13 54 Z"/><path d="M8 16 L32 16"/><path d="M24 4 L27 18"/><circle cx="17" cy="48" r="2.5"/><circle cx="23" cy="49" r="2.5"/></svg>
+      <svg class="dd-sisi dd-b" viewBox="0 0 40 60"><circle cx="20" cy="16" r="11"/><path d="M9 24 L20 56 L31 24"/><path d="M14 36 L26 36"/></svg>
+    </div>
     <div class="logo-wrap">
       <div class="logo-img"><img src="./logo.png" alt="Momoyo"/></div>
       <div class="login-title">AbsenKu</div>
@@ -190,7 +258,10 @@ body{min-height:100vh}
       <!-- CREW login -->
       <div id="login-crew-form">
         <label class="lbl">Outlet</label>
-        <select class="input" id="li-outlet" onchange="onOutletChange()">
+        <!-- required hanya untuk pencocokan CSS :invalid (lihat .login-hint).
+             Tidak ada <form> di sini, jadi tidak ada validasi bawaan yang
+             ikut aktif — perilaku dropdown persis seperti sebelumnya. -->
+        <select class="input" id="li-outlet" onchange="onOutletChange()" required>
           <option value="">Memuat outlet...</option>
         </select>
         <div id="li-crew-wrap" style="display:none">
@@ -204,6 +275,7 @@ body{min-height:100vh}
           <input class="input" type="password" id="li-pass" placeholder="Password..."/>
         </div>
         <button class="btn btn-brand" id="btn-login-crew" onclick="loginCrew()" disabled>Masuk →</button>
+        <div class="login-hint">Pilih outlet dulu untuk masuk</div>
       </div>
 
       <!-- OWNER login -->
@@ -213,7 +285,7 @@ body{min-height:100vh}
         <button class="btn btn-brand" onclick="loginOwner()">Masuk sebagai Owner</button>
       </div>
     </div>
-    <div class="login-foot">GPS AKTIF · FOTO SELFIE WAJIB · V2</div>
+    <div class="login-foot">📍 GPS AKTIF · 📷 FOTO SELFIE WAJIB · V2</div>
   </div>
 </div>
 
